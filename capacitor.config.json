@@ -1,5 +1,5 @@
 {
   "appId": "com.antigravity.fasttrack",
   "appName": "FastTrack",
-  "webDir": "www"
+  "webDir": "."
 }
