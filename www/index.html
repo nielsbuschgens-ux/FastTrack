@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FastTrack Fitness</title>
+    <!-- Modern web font -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <!-- Ionicons for SVG icons -->
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+</head>
+
+<body>
+    <div id="app">
+
+        <!-- 0) Login Screen -->
+        <main id="screen-login" class="screen active" style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh;">
+            <header class="app-header" style="text-align: center; margin-bottom: 2rem;">
+                <h1>FASTTRACK.</h1>
+                <p id="auth-subtitle" style="font-weight: 500; font-size: 1.1rem; color: #00ffa3;">FastTrack your Progress</p>
+            </header>
+            
+            <div class="glass-card" style="padding: 24px; width: 80%; max-width: 300px; display: flex; flex-direction: column; gap: 16px;">
+                <input type="email" id="email-input" placeholder="E-mailadres" 
+                    style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; font-family: inherit; font-size: 16px; outline: none; box-sizing: border-box;">
+                <input type="password" id="password-input" placeholder="Wachtwoord" 
+                    style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; font-family: inherit; font-size: 16px; outline: none; box-sizing: border-box;">
+                
+                <div id="auth-error-msg" style="color: #ff4d4f; font-size: 0.85rem; font-weight: 500; display: none; text-align: center;"></div>
+
+                <button onclick="app.handleAuth()" id="login-btn"
+                    style="background: #00ffa3; color: black; border: none; border-radius: 8px; padding: 12px; font-weight: bold; font-size: 16px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 8px;">
+                    <span id="auth-action-text">Login</span> <ion-icon name="arrow-forward-outline"></ion-icon>
+                </button>
+                
+                <div style="text-align: center; margin-top: 8px;">
+                    <button onclick="app.toggleAuthMode()" id="auth-toggle-btn" style="background: none; border: none; color: var(--text-muted); font-family: inherit; font-size: 0.9rem; cursor: pointer; text-decoration: underline;">
+                        Nog geen account? Registreer hier
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- 1) Launch Screen -->
+        <main id="screen-launch" class="screen">
+            <header class="top-nav" style="justify-content: space-between; padding: 16px 24px;">
+                <div class="app-header" style="padding: 0; text-align: left;">
+                    <h1 style="margin-left: -2px;">FASTTRACK.</h1>
+                    <p>Welkom, <span id="display-username">--</span></p>
+                </div>
+                <div style="display: flex; gap: 8px; margin-right: -8px;">
+                    <button class="icon-btn" id="theme-toggle-btn" onclick="app.toggleTheme()" title="Wissel Thema" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255,255,255,0.1);">
+                        <ion-icon name="sunny-outline" id="theme-icon"></ion-icon>
+                    </button>
+                    <button class="icon-btn" onclick="app.logout()" title="Uitloggen" style="background: rgba(255,0,0,0.1); border: 1px solid rgba(255,0,0,0.2);">
+                        <ion-icon name="log-out-outline" style="color: #ff4d4f;"></ion-icon>
+                    </button>
+                </div>
+            </header>
+
+            <div class="split-container">
+                <button class="split-btn glass-card" onclick="app.selectSplit('Push')">
+                    <h2>Push</h2>
+                    <svg viewBox="0 0 32 32" style="width: 2.5rem; height: 2.5rem; stroke: var(--primary); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;">
+                        <!-- Neck -->
+                        <path d="M13 5v3c0 .5-.5 1-1 1H8c-2.5 0-4 1.5-4.5 3.5-.2 1 .3 2.5 1 3.5.5.8 1.5 1.5 2.5 1.5.5 0 1 .5 1 1v6c0 1.5 1 2.5 2.5 2.5h11c1.5 0 2.5-1 2.5-2.5v-6c0-.5.5-1 1-1 1 0 2-.7 2.5-1.5.7-1 1.2-2.5 1-3.5C28 10.5 26.5 9 24 9h-4c-.5 0-1-.5-1-1V5" />
+                        <!-- Pecs -->
+                        <path d="M10.5 15.5c2 1 3.5 1 5.5 1s3.5 0 5.5-1" />
+                        <path d="M16 11v5" />
+                        <!-- Abs Grid -->
+                        <path d="M16 16v9" />
+                        <path d="M13 18h6" />
+                        <path d="M13 21h6" />
+                        <path d="M13 24h6" />
+                    </svg>
+                </button>
+                <button class="split-btn glass-card" onclick="app.selectSplit('Pull')">
+                    <h2>Pull</h2>
+                    <svg viewBox="0 0 32 32" style="width: 2.5rem; height: 2.5rem; stroke: var(--primary); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;">
+                        <!-- Neck & Traps -->
+                        <path d="M14 6v3" />
+                        <path d="M18 6v3" />
+                        <!-- Outer Torso / V-Taper -> includes shoulders -->
+                        <path d="M14 9H8c-2 0-3 1.5-4 3 0 0-2 4 1 6 1 .7 2 1 3 1 .5 0 1 .5 1 1v6c0 1.5 1 2.5 2.5 2.5h9c1.5 0 2.5-1 2.5-2.5v-6c0-.5.5-1 1-1 1 0 2-.3 3-1 3-2 1-6 1-6-1-1.5-2-3-4-3h-6" />
+                        <!-- Lats inner line giving depth -->
+                        <path d="M8 13c3 4 5 10 5.5 14" />
+                        <path d="M24 13c-3 4-5 10-5.5 14" />
+                        <!-- Spine -->
+                        <path d="M16 9v18" />
+                        <!-- Trap lines -->
+                        <path d="M16 14L10 9" />
+                        <path d="M16 14l6-5" />
+                    </svg>
+                </button>
+                <button class="split-btn glass-card" onclick="app.selectSplit('Legs')">
+                    <h2>Legs</h2>
+                    <svg viewBox="0 0 32 32" style="width: 2.5rem; height: 2.5rem; stroke: var(--primary); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;">
+                        <!-- Glute / Hip top -->
+                        <path d="M16 4c3 3 5 8 3 12" />
+                        <path d="M11 4c-1 4-1 9 2 12" />
+                        <!-- Quad detail -->
+                        <path d="M13 5c1 3 2 7 1 10" />
+                        <!-- Knee -->
+                        <circle cx="15.5" cy="18" r="2.5" />
+                        <!-- Calf -->
+                        <path d="M18 18c3 3 3 6 1 9" />
+                        <path d="M13 18c-1 4-1 8 0 10" />
+                        <!-- Foot -->
+                        <path d="M13 28h7c2 0 3 1 3 2H11c0-1 1-2 2-2z" />
+                    </svg>
+                </button>
+            </div>
+        </main>
+
+        <!-- 2) Workout Screen -->
+        <main id="screen-workout" class="screen">
+            <header class="top-nav">
+                <button class="icon-btn" onclick="app.navTo('launch')">
+                    <ion-icon name="chevron-back-outline"></ion-icon>
+                </button>
+                <h2 id="workout-title">Push Workout</h2>
+                <button class="icon-btn" onclick="app.showAddExerciseForm()">
+                    <ion-icon name="add-outline"></ion-icon>
+                </button>
+            </header>
+
+            <div id="add-ex-container" style="display: none; padding: 0 16px 16px 16px;">
+                <div class="glass-card" style="display: flex; gap: 8px; padding: 12px;">
+                    <input type="text" id="new-ex-input" placeholder="Nieuwe oefening..."
+                        style="flex: 1; background: transparent; border: none; color: white; outline: none; font-family: inherit; font-size: 16px;">
+                    <button onclick="app.saveNewExercise()"
+                        style="background: #00ffa3; color: black; border: none; border-radius: 8px; padding: 8px 16px; font-weight: bold; cursor: pointer;">+
+                        Add</button>
+                </div>
+            </div>
+
+            <div class="list-container" id="exercise-list">
+                <!-- Exercises injected via JS -->
+            </div>
+        </main>
+
+        <!-- 3) Exercise Log Screen -->
+        <main id="screen-log" class="screen">
+            <header class="top-nav">
+                <button class="icon-btn" onclick="app.navTo('workout')">
+                    <ion-icon name="chevron-back-outline"></ion-icon>
+                </button>
+                <h2 id="exercise-title">Bench Press</h2>
+                <button class="icon-btn" onclick="app.showStats()">
+                    <ion-icon name="stats-chart-outline"></ion-icon>
+                </button>
+            </header>
+
+            <div class="log-content">
+                <!-- Use Last Bar -->
+                <div class="use-last-bar" id="use-last-bar" style="display: none;">
+                    <button class="last-btn" onclick="app.useLastWeight()">
+                        Last: <span id="last-weight-val">--</span> kg
+                    </button>
+                    <button class="last-btn" onclick="app.useLastReps()">
+                        Last: <span id="last-reps-val">--</span> reps
+                    </button>
+                </div>
+
+                <!-- Modifiers -->
+                <div class="modifier-group">
+                    <h3 class="mod-label">Weight (kg)</h3>
+                    <div class="stepper">
+                        <button class="step-btn" onclick="app.updateWeight(-5)">
+                            <ion-icon name="remove-outline"></ion-icon>
+                        </button>
+                        <div class="step-val" id="current-weight">0</div>
+                        <button class="step-btn" onclick="app.updateWeight(5)">
+                            <ion-icon name="add-outline"></ion-icon>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="modifier-group">
+                    <h3 class="mod-label">Reps</h3>
+                    <div class="stepper">
+                        <button class="step-btn" onclick="app.updateReps(-1)">
+                            <ion-icon name="remove-outline"></ion-icon>
+                        </button>
+                        <div class="step-val" id="current-reps">0</div>
+                        <button class="step-btn" onclick="app.updateReps(1)">
+                            <ion-icon name="add-outline"></ion-icon>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Area -->
+            <div class="action-dock" style="display: flex; flex-direction: column; gap: 8px;">
+                <button id="log-btn" class="log-action-btn" onclick="app.submitLog()">
+                    Log Set / Next
+                    <ion-icon name="checkmark-done-outline"></ion-icon>
+                </button>
+                <button id="undo-btn" class="log-action-btn" onclick="app.undoLastLog()" style="background: rgba(255, 77, 79, 0.1); color: #ff4d4f; border: 1px solid rgba(255, 77, 79, 0.2); font-size: 0.95rem;">
+                    Verwijder Laatste Set
+                    <ion-icon name="trash-outline"></ion-icon>
+                </button>
+            </div>
+        </main>
+
+        <!-- 4) Statistics Screen -->
+        <main id="screen-stats" class="screen">
+            <header class="top-nav">
+                <button class="icon-btn" onclick="app.navTo('log')">
+                    <ion-icon name="chevron-back-outline"></ion-icon>
+                </button>
+                <h2 id="stats-title">Progressie</h2>
+                <div style="width:40px"></div>
+            </header>
+
+            <div class="stats-content">
+                <div class="chart-container glass-card">
+                    <canvas id="progressChart"></canvas>
+                </div>
+                <div class="stats-summary" id="stats-summary">
+                    <!-- Stats summary injected here -->
+                </div>
+            </div>
+        </main>
+
+        <!-- 5) Global Progress Screen -->
+        <main id="screen-global-progress" class="screen">
+            <header class="app-header" style="padding-bottom: 20px;">
+                <h1>FASTTRACK.</h1>
+                <p>Jouw data</p>
+            </header>
+
+            <div class="stats-content" style="padding-bottom: 100px;">
+                <div class="glass-card" style="padding: 16px; margin-bottom: 16px;">
+                    <select id="global-ex-select" onchange="app.renderGlobalProgress()"
+                        style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); color: white; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; font-family: inherit; font-size: 1rem; outline: none; cursor: pointer;">
+                        <!-- Options injected by JS -->
+                    </select>
+                </div>
+
+                <div class="chart-container glass-card" style="margin-bottom: 20px;">
+                    <canvas id="globalChart"></canvas>
+                </div>
+
+                <div class="stats-summary" id="global-summary">
+                    <!-- Stats summary injected here -->
+                </div>
+            </div>
+        </main>
+
+        <!-- Bottom Navigation Bar -->
+        <nav class="bottom-nav">
+            <button id="nav-workout-btn" class="nav-btn active" onclick="app.navToMode('launch', this)">
+                <ion-icon name="barbell-outline"></ion-icon>
+                <span>Workout</span>
+            </button>
+            <button id="nav-progress-btn" class="nav-btn" onclick="app.showGlobalProgress(this)">
+                <ion-icon name="trending-up-outline"></ion-icon>
+                <span>Progress</span>
+            </button>
+        </nav>
+
+    </div>
+
+    <!-- Toast Component -->
+    <div id="toast" class="toast">
+        <ion-icon name="flash"></ion-icon>
+        <span id="toast-msg">Set Opgeslagen 🚀</span>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
