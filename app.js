@@ -4,8 +4,10 @@
  */
 
 // --- 1. Internal Database & Supabase ---
-const supabaseUrl = 'https://ndgbbbpugaspmgfmknki.supabase.co';
-const supabaseKey = 'sb_publishable_LuaGcRjZAupJNvu75BhsdA_oaGmY7mL'; // The public anon key from .env
+// Retrieve from git-ignored config.js or environment variables at build time
+const supabaseUrl = (window.APP_CONFIG ? window.APP_CONFIG.SUPABASE_URL : '') || '';
+const supabaseKey = (window.APP_CONFIG ? window.APP_CONFIG.SUPABASE_KEY : '') || '';
+
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey, {
     auth: {
         persistSession: true,

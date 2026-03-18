@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "node generate-config.js"
   },
   "keywords": [],
   "author": "",
@@ -15,6 +16,7 @@
   },
   "devDependencies": {
     "@capacitor/android": "^8.2.0",
-    "@capacitor/cli": "^8.2.0"
+    "@capacitor/cli": "^8.2.0",
+    "dotenv": "^17.3.1"
   }
 }

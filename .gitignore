@@ -11,3 +11,5 @@ android/captures/
 local.properties
 .idea/
 *.iml
+config.js
+.env
