@@ -17,17 +17,7 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey, {
 });
 
 const DB = {
-    exercises: JSON.parse(localStorage.getItem('fitness_exercises')) || [
-        { id: 'ex-1', category: 'Push', name: 'Bench Press' },
-        { id: 'ex-2', category: 'Push', name: 'Shoulder Press' },
-        { id: 'ex-3', category: 'Push', name: 'Tricep Pushdown' },
-        { id: 'ex-4', category: 'Pull', name: 'Pull Ups' },
-        { id: 'ex-5', category: 'Pull', name: 'Barbell Row' },
-        { id: 'ex-6', category: 'Pull', name: 'Bicep Curl' },
-        { id: 'ex-7', category: 'Legs', name: 'Squat' },
-        { id: 'ex-8', category: 'Legs', name: 'Leg Press' },
-        { id: 'ex-9', category: 'Legs', name: 'Hamstring Curl' }
-    ],
+    exercises: [],
 
     async saveLog(log) {
         // Authenticated user ID is populated by Supabase automatically (via JWT)
@@ -81,6 +71,58 @@ const DB = {
             console.error("Delete Error:", error);
             throw error;
         }
+    },
+
+    async getExercises() {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session) return [];
+
+        const { data, error } = await supabaseClient
+            .from('fitness_exercises')
+            .select('*')
+            .order('created_at', { ascending: true });
+
+        if (error) {
+            console.error("Fetch Exercises Error:", error);
+            return [];
+        }
+        return data; 
+    },
+
+    async saveExercise(exercise) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session) return;
+
+        const { data, error } = await supabaseClient
+            .from('fitness_exercises')
+            .insert({
+                user_id: session.user.id,
+                name: exercise.name,
+                category: exercise.category
+            })
+            .select();
+
+        if (error) {
+            console.error("Save Exercise Error:", error);
+            throw error;
+        }
+        return data[0];
+    },
+
+    async deleteExercise(id) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (!session) return;
+
+        const { error } = await supabaseClient
+            .from('fitness_exercises')
+            .delete()
+            .eq('id', id)
+            .eq('user_id', session.user.id);
+
+        if (error) {
+            console.error("Delete Exercise Error:", error);
+            throw error;
+        }
     }
 };
 
@@ -94,7 +136,8 @@ const state = {
     chart: null,
     globalChart: null,
     authMode: 'login', // 'login' or 'register'
-    theme: localStorage.getItem('fasttrack_theme') || 'dark'
+    theme: localStorage.getItem('fasttrack_theme') || 'dark',
+    exercisesChannel: null
 };
 
 // --- 3. UI Logic ---
@@ -141,6 +184,7 @@ const app = {
         
         const subtitle = document.getElementById('auth-subtitle');
         const actionText = document.getElementById('auth-action-text');
+        const nameInput = document.getElementById('name-input');
         const toggleBtn = document.getElementById('auth-toggle-btn');
         const errorMsg = document.getElementById('auth-error-msg');
         
@@ -150,26 +194,31 @@ const app = {
             subtitle.innerText = 'FastTrack your Progress';
             actionText.innerText = 'Login';
             toggleBtn.innerText = 'Nog geen account? Registreer hier';
+            nameInput.style.display = 'none';
         } else {
-            subtitle.innerText = 'FastTrack your Progress';
+            subtitle.innerText = 'Account Aanmaken';
             actionText.innerText = 'Registreer';
             toggleBtn.innerText = 'Al een account? Log in';
+            nameInput.style.display = 'block';
+            nameInput.focus();
         }
     },
 
-    showAuthError(message) {
+    showAuthError(message, isSuccess = false) {
         const errorMsg = document.getElementById('auth-error-msg');
         errorMsg.innerText = message;
         errorMsg.style.display = 'block';
+        errorMsg.style.color = isSuccess ? '#00ffa3' : '#ff4d4f';
     },
 
     async handleAuth() {
         // Aggressively trim standard and zero-width spaces from the inputs
         const emailInput = document.getElementById('email-input').value.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+        const nameInputVal = document.getElementById('name-input').value.trim();
         const passwordInput = document.getElementById('password-input').value.trim();
         
-        if (!emailInput || !passwordInput) {
-            this.showAuthError('Vul e-mail en wachtwoord in.');
+        if (!emailInput || !passwordInput || (state.authMode === 'register' && !nameInputVal)) {
+            this.showAuthError('Vul alle velden in.');
             return;
         }
 
@@ -192,7 +241,10 @@ const app = {
         } else {
             const { data, error } = await supabaseClient.auth.signUp({
                 email: emailInput,
-                password: passwordInput
+                password: passwordInput,
+                options: {
+                    data: { full_name: nameInputVal }
+                }
             });
             authData = data;
             authError = error;
@@ -213,35 +265,77 @@ const app = {
         }
 
         if (authData && authData.user) {
+            // Check if confirmation is needed (session is null)
+            if (state.authMode === 'register' && !authData.session) {
+                this.showAuthError('Check je e-mail om je account te bevestigen!', true);
+                document.getElementById('auth-action-text').innerText = originalText;
+                btn.disabled = false;
+                // Switch back to login for them
+                setTimeout(() => this.toggleAuthMode(), 3000);
+                return;
+            }
+
             this.handleSuccessfulAuth(authData.user);
             document.getElementById('email-input').value = '';
             document.getElementById('password-input').value = '';
+            document.getElementById('name-input').value = '';
             document.getElementById('auth-action-text').innerText = originalText;
             btn.disabled = false;
         }
     },
 
-    handleSuccessfulAuth(user) {
+    async handleSuccessfulAuth(user) {
         console.log("Logged in successfully as", user.email);
         
-        // Create user display name (strip @...)
-        const displayName = user.email.split('@')[0];
+        // Unsubscribe from any previous channel (if any)
+        if (state.exercisesChannel) {
+            state.exercisesChannel.unsubscribe();
+            state.exercisesChannel = null;
+        }
+
+        // Try to get name from metadata, fallback to email prefix
+        const displayName = (user.user_metadata && user.user_metadata.full_name) || user.email.split('@')[0];
         document.getElementById('display-username').innerText = displayName;
         
-        // Scope exercises to strict User ID UUID
-        const userIdKey = `fitness_exercises_uid_${user.id}`;
-        
-        DB.exercises = JSON.parse(localStorage.getItem(userIdKey)) || [
-            { id: 'ex-1', category: 'Push', name: 'Bench Press' },
-            { id: 'ex-2', category: 'Push', name: 'Shoulder Press' },
-            { id: 'ex-3', category: 'Push', name: 'Tricep Pushdown' },
-            { id: 'ex-4', category: 'Pull', name: 'Pull Ups' },
-            { id: 'ex-5', category: 'Pull', name: 'Barbell Row' },
-            { id: 'ex-6', category: 'Pull', name: 'Bicep Curl' },
-            { id: 'ex-7', category: 'Legs', name: 'Squat' },
-            { id: 'ex-8', category: 'Legs', name: 'Leg Press' },
-            { id: 'ex-9', category: 'Legs', name: 'Hamstring Curl' }
-        ];
+        // Real-time Exercise Sync Subscription
+        state.exercisesChannel = supabaseClient
+            .channel('public:fitness_exercises')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'fitness_exercises' }, async () => {
+                console.log("Exercises updated in Supabase, refreshing...");
+                DB.exercises = await DB.getExercises();
+                // If we are currently on a screen that shows exercises, re-render
+                if (document.getElementById('screen-workout').classList.contains('active')) {
+                    this.renderExerciseList();
+                }
+            })
+            .subscribe();
+
+        // Fetch exercises from Supabase
+        const customExercises = await DB.getExercises();
+
+        // If user has NO exercises, we can bootstrap them with defaults OR just leave it empty.
+        if (customExercises.length === 0) {
+            const defaultNames = [
+                { category: 'Push', name: 'Bench Press' },
+                { category: 'Push', name: 'Shoulder Press' },
+                { category: 'Push', name: 'Tricep Pushdown' },
+                { category: 'Pull', name: 'Pull Ups' },
+                { category: 'Pull', name: 'Barbell Row' },
+                { category: 'Pull', name: 'Bicep Curl' },
+                { category: 'Legs', name: 'Squat' },
+                { category: 'Legs', name: 'Leg Press' },
+                { category: 'Legs', name: 'Hamstring Curl' }
+            ];
+            
+            // Insert defaults into Supabase for this user
+            // Use Promise.all to be faster
+            await Promise.all(defaultNames.map(item => DB.saveExercise(item)));
+            
+            // Refetch after inserting defaults (the subscription might fire too, but we do it manually for speed)
+            DB.exercises = await DB.getExercises();
+        } else {
+            DB.exercises = customExercises;
+        }
 
         // Apply theme icon properly after login
         const themeIcon = document.getElementById('theme-icon');
@@ -253,6 +347,10 @@ const app = {
     },
 
     async logout() {
+        if (state.exercisesChannel) {
+            state.exercisesChannel.unsubscribe();
+            state.exercisesChannel = null;
+        }
         await supabaseClient.auth.signOut();
         this.navTo('login');
     },
@@ -387,29 +485,27 @@ const app = {
         }
     },
 
-    saveNewExercise() {
+    async saveNewExercise() {
         const input = document.getElementById('new-ex-input');
         const name = input.value.trim();
         if (!name) return;
 
-        const newEx = {
-            id: 'ex-custom-' + Date.now(),
+        const newExData = {
             category: state.currentCategory,
             name: name
         };
 
-        DB.exercises.push(newEx);
-        
-        supabaseClient.auth.getSession().then(({ data: { session } }) => {
-            if (session && session.user) {
-                const userIdKey = `fitness_exercises_uid_${session.user.id}`;
-                localStorage.setItem(userIdKey, JSON.stringify(DB.exercises));
+        try {
+            const savedEx = await DB.saveExercise(newExData);
+            if (savedEx) {
+                DB.exercises.push(savedEx);
+                input.value = '';
+                this.showAddExerciseForm(); // hide
+                this.renderExerciseList(); // re-render list
             }
-        });
-
-        input.value = '';
-        this.showAddExerciseForm(); // hide
-        this.renderExerciseList(); // re-render list
+        } catch (e) {
+            this.showToast('Fout bij opslaan oefening.');
+        }
     },
 
     renderExerciseList() {
@@ -521,19 +617,17 @@ const app = {
         });
     },
 
-    deleteExercise(id) {
+    async deleteExercise(id) {
+        // Find index in cache
         const index = DB.exercises.findIndex(ex => ex.id === id);
         if (index > -1) {
-            DB.exercises.splice(index, 1);
-            
-            supabaseClient.auth.getSession().then(({ data: { session } }) => {
-                if (session && session.user) {
-                    const userIdKey = `fitness_exercises_uid_${session.user.id}`;
-                    localStorage.setItem(userIdKey, JSON.stringify(DB.exercises));
-                }
-            });
-            
-            this.renderExerciseList();
+            try {
+                await DB.deleteExercise(id);
+                DB.exercises.splice(index, 1);
+                this.renderExerciseList();
+            } catch (e) {
+                this.showToast('Fout bij verwijderen.');
+            }
         }
     },
 
