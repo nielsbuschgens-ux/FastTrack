@@ -48,7 +48,7 @@ const DB = {
             .from('fitness_logs')
             .select('*')
             .eq('exercise_id', exerciseId)
-            .order('date', { ascending: false }); // Sort by date DESC
+            .order('created_at', { ascending: false }); // Sort by created_at DESC
 
         if (error) {
             console.error("Fetch Error:", error);
@@ -137,7 +137,8 @@ const state = {
     globalChart: null,
     authMode: 'login', // 'login' or 'register'
     theme: localStorage.getItem('fasttrack_theme') || 'dark',
-    exercisesChannel: null
+    exercisesChannel: null,
+    logsChannel: null
 };
 
 // --- 3. UI Logic ---
@@ -145,16 +146,26 @@ const app = {
     async start() {
         console.log("Application started.");
         
+        if (!supabaseUrl || !supabaseKey) {
+            console.error("Supabase configuration missing!");
+            this.showAuthError("Configuratie error: SUPABASE_URL of KEY ontbreekt.");
+            return;
+        }
+
         // Apply theme on load
         if (state.theme === 'light') {
             document.documentElement.classList.add('light-theme');
-            // Icon updates when user actually sees the screen, but we set it anyway if it is rendered.
         }
 
         // Check if there is an active session on load
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (session && session.user) {
-            this.handleSuccessfulAuth(session.user);
+        try {
+            const { data: { session }, error } = await supabaseClient.auth.getSession();
+            if (error) throw error;
+            if (session && session.user) {
+                this.handleSuccessfulAuth(session.user);
+            }
+        } catch (e) {
+            console.warn("Session check failed, likely not logged in:", e.message);
         }
     },
 
@@ -212,7 +223,6 @@ const app = {
     },
 
     async handleAuth() {
-        // Aggressively trim standard and zero-width spaces from the inputs
         const emailInput = document.getElementById('email-input').value.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
         const nameInputVal = document.getElementById('name-input').value.trim();
         const passwordInput = document.getElementById('password-input').value.trim();
@@ -223,63 +233,61 @@ const app = {
         }
 
         const btn = document.getElementById('login-btn');
-        const originalText = document.getElementById('auth-action-text').innerText;
-        document.getElementById('auth-action-text').innerHTML = 'Laden... <ion-icon name="hourglass-outline"></ion-icon>';
+        const actionSpan = document.getElementById('auth-action-text');
+        const originalText = actionSpan.innerText;
+        actionSpan.innerHTML = 'Laden... <ion-icon name="hourglass-outline"></ion-icon>';
         btn.disabled = true;
         document.getElementById('auth-error-msg').style.display = 'none';
 
-        let authData = null;
-        let authError = null;
+        try {
+            let authData = null;
+            let authError = null;
 
-        if (state.authMode === 'login') {
-            const { data, error } = await supabaseClient.auth.signInWithPassword({
-                email: emailInput,
-                password: passwordInput
-            });
-            authData = data;
-            authError = error;
-        } else {
-            const { data, error } = await supabaseClient.auth.signUp({
-                email: emailInput,
-                password: passwordInput,
-                options: {
-                    data: { full_name: nameInputVal }
-                }
-            });
-            authData = data;
-            authError = error;
-        }
-
-        if (authError) {
-            console.error("Auth error:", authError);
-            let userMsg = authError.message || "Er ging iets mis.";
-            if (authError.message.includes('Invalid login credentials')) userMsg = "E-mail of wachtwoord is onjuist.";
-            if (authError.message.includes('Password should be at least')) userMsg = "Wachtwoord moet uit minstens 6 tekens bestaan.";
-            if (authError.message.includes('already registered')) userMsg = "Met dit e-mailadres is al een account geregistreerd.";
-            if (authError.message.includes('Email confirmations not enabled') || authError.message.includes('Email link')) userMsg = "E-mail bevestiging staat aan in Supabase. Zet dit uit via Settings -> Auth.";
-            
-            this.showAuthError(userMsg);
-            document.getElementById('auth-action-text').innerText = originalText;
-            btn.disabled = false;
-            return;
-        }
-
-        if (authData && authData.user) {
-            // Check if confirmation is needed (session is null)
-            if (state.authMode === 'register' && !authData.session) {
-                this.showAuthError('Check je e-mail om je account te bevestigen!', true);
-                document.getElementById('auth-action-text').innerText = originalText;
-                btn.disabled = false;
-                // Switch back to login for them
-                setTimeout(() => this.toggleAuthMode(), 3000);
-                return;
+            if (state.authMode === 'login') {
+                const { data, error } = await supabaseClient.auth.signInWithPassword({
+                    email: emailInput,
+                    password: passwordInput
+                });
+                authData = data;
+                authError = error;
+            } else {
+                const { data, error } = await supabaseClient.auth.signUp({
+                    email: emailInput,
+                    password: passwordInput,
+                    options: {
+                        data: { full_name: nameInputVal }
+                    }
+                });
+                authData = data;
+                authError = error;
             }
 
-            this.handleSuccessfulAuth(authData.user);
-            document.getElementById('email-input').value = '';
-            document.getElementById('password-input').value = '';
-            document.getElementById('name-input').value = '';
-            document.getElementById('auth-action-text').innerText = originalText;
+            if (authError) {
+                throw authError;
+            }
+
+            if (authData && authData.user) {
+                if (state.authMode === 'register' && !authData.session) {
+                    this.showAuthError('Check je e-mail om je account te bevestigen!', true);
+                    // Switch back to login for them
+                    setTimeout(() => this.toggleAuthMode(), 3000);
+                } else {
+                    await this.handleSuccessfulAuth(authData.user);
+                    document.getElementById('email-input').value = '';
+                    document.getElementById('password-input').value = '';
+                    document.getElementById('name-input').value = '';
+                }
+            }
+        } catch (err) {
+            console.error("Auth process error:", err);
+            let userMsg = err.message || "Er ging iets mis.";
+            if (err.message.includes('Invalid login credentials')) userMsg = "E-mail of wachtwoord is onjuist.";
+            if (err.message.includes('Password should be at least')) userMsg = "Wachtwoord moet uit minstens 6 tekens bestaan.";
+            if (err.message.includes('already registered')) userMsg = "Met dit e-mailadres is al een account geregistreerd.";
+            
+            this.showAuthError(userMsg);
+        } finally {
+            actionSpan.innerText = originalText;
             btn.disabled = false;
         }
     },
@@ -306,6 +314,45 @@ const app = {
                 // If we are currently on a screen that shows exercises, re-render
                 if (document.getElementById('screen-workout').classList.contains('active')) {
                     this.renderExerciseList();
+                }
+            })
+            .subscribe();
+
+        // Real-time Logs Sync Subscription
+        state.logsChannel = supabaseClient
+            .channel('public:fitness_logs')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'fitness_logs' }, async (payload) => {
+                console.log("Logs updated in Supabase:", payload);
+                
+                // If we have a current exercise, and the change is for that exercise
+                if (state.currentExercise && (
+                    (payload.new && payload.new.exercise_id === state.currentExercise.id) || 
+                    (payload.old && payload.old.exercise_id === state.currentExercise.id)
+                )) {
+                    // Refresh data
+                    const logs = await DB.getLogsForExercise(state.currentExercise.id);
+                    state.lastLog = logs.length > 0 ? logs[0] : null;
+                    
+                    // Update Log screen if active
+                    if (document.getElementById('screen-log').classList.contains('active')) {
+                        if (state.lastLog) {
+                            document.getElementById('use-last-bar').style.display = 'flex';
+                            document.getElementById('last-weight-val').innerText = state.lastLog.weight;
+                            document.getElementById('last-reps-val').innerText = state.lastLog.reps;
+                        } else {
+                            document.getElementById('use-last-bar').style.display = 'none';
+                        }
+                    }
+                    
+                    // Update Stats screen if active (re-renders chart)
+                    if (document.getElementById('screen-stats').classList.contains('active')) {
+                        this.showStats(); 
+                    }
+                }
+                
+                // Update Global Progress if active (re-renders global chart)
+                if (document.getElementById('screen-global-progress').classList.contains('active')) {
+                    this.renderGlobalProgress();
                 }
             })
             .subscribe();
@@ -350,6 +397,10 @@ const app = {
         if (state.exercisesChannel) {
             state.exercisesChannel.unsubscribe();
             state.exercisesChannel = null;
+        }
+        if (state.logsChannel) {
+            state.logsChannel.unsubscribe();
+            state.logsChannel = null;
         }
         await supabaseClient.auth.signOut();
         this.navTo('login');
@@ -401,13 +452,15 @@ const app = {
         const logs = await DB.getLogsForExercise(exerciseId);
         const chartData = [...logs].reverse();
 
-        const ctx = document.getElementById('globalChart').getContext('2d');
+        const canvas = document.getElementById('globalChart');
+        if (!canvas) return; 
+        const ctx = canvas.getContext('2d');
         if (state.globalChart) state.globalChart.destroy();
 
         state.globalChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: chartData.map(d => new Date(d.date).toLocaleDateString()),
+                labels: chartData.map(d => new Date(d.created_at).toLocaleDateString()),
                 datasets: [{
                     label: 'Gewicht (kg)',
                     data: chartData.map(d => d.weight),
@@ -435,7 +488,9 @@ const app = {
                         ticks: { 
                             color: state.theme === 'light' ? '#64748b' : '#888', 
                             maxRotation: 45, 
-                            minRotation: 45 
+                            minRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 8
                         }
                     }
                 },
@@ -682,6 +737,20 @@ const app = {
         document.getElementById('current-reps').innerText = state.reps;
     },
 
+    useLastWeight() {
+        if (state.lastLog) {
+            state.weight = state.lastLog.weight;
+            this.updateCounters();
+        }
+    },
+
+    useLastReps() {
+        if (state.lastLog) {
+            state.reps = state.lastLog.reps;
+            this.updateCounters();
+        }
+    },
+
     async submitLog() {
         await DB.saveLog({
             exerciseId: state.currentExercise.id,
@@ -758,7 +827,7 @@ const app = {
         state.chart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: data.map(d => new Date(d.date).toLocaleDateString()),
+                labels: data.map(d => new Date(d.created_at).toLocaleDateString()),
                 datasets: [{
                     label: 'Gewicht (kg)',
                     data: data.map(d => d.weight),
