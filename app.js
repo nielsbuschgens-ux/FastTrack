@@ -316,41 +316,22 @@ const app = {
                     this.renderExerciseList();
                 }
             })
-            .subscribe();
+            .subscribe((status) => {
+                console.log("Exercises sub status:", status);
+                this.updateSyncIndicator(status === 'SUBSCRIBED');
+            });
 
         // Real-time Logs Sync Subscription
         state.logsChannel = supabaseClient
             .channel('public:fitness_logs')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'fitness_logs' }, async (payload) => {
                 console.log("Logs updated in Supabase:", payload);
-                
-                // If we have a current exercise, and the change is for that exercise
                 if (state.currentExercise && (
                     (payload.new && payload.new.exercise_id === state.currentExercise.id) || 
                     (payload.old && payload.old.exercise_id === state.currentExercise.id)
                 )) {
-                    // Refresh data
-                    const logs = await DB.getLogsForExercise(state.currentExercise.id);
-                    state.lastLog = logs.length > 0 ? logs[0] : null;
-                    
-                    // Update Log screen if active
-                    if (document.getElementById('screen-log').classList.contains('active')) {
-                        if (state.lastLog) {
-                            document.getElementById('use-last-bar').style.display = 'flex';
-                            document.getElementById('last-weight-val').innerText = state.lastLog.weight;
-                            document.getElementById('last-reps-val').innerText = state.lastLog.reps;
-                        } else {
-                            document.getElementById('use-last-bar').style.display = 'none';
-                        }
-                    }
-                    
-                    // Update Stats screen if active (re-renders chart)
-                    if (document.getElementById('screen-stats').classList.contains('active')) {
-                        this.showStats(); 
-                    }
+                    this.manualSyncLogs();
                 }
-                
-                // Update Global Progress if active (re-renders global chart)
                 if (document.getElementById('screen-global-progress').classList.contains('active')) {
                     this.renderGlobalProgress();
                 }
@@ -424,6 +405,44 @@ const app = {
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         if (btnElement) btnElement.classList.add('active');
         this.navTo(screenId);
+    },
+
+    updateSyncIndicator(isOnline) {
+        const dot = document.getElementById('sync-indicator');
+        if (dot) dot.className = `sync-status ${isOnline ? 'online' : ''}`;
+    },
+
+    async manualSyncExercises() {
+        const btn = event.currentTarget;
+        const icon = btn.querySelector('ion-icon');
+        icon.classList.add('syncing-anim'); // Add CSS for this or just rotate
+        
+        try {
+            DB.exercises = await DB.getExercises();
+            this.renderExerciseList();
+            this.showToast('Lijst Ververst! 🔄');
+        } finally {
+            setTimeout(() => icon.classList.remove('syncing-anim'), 500);
+        }
+    },
+
+    async manualSyncLogs() {
+        if (!state.currentExercise) return;
+        const logs = await DB.getLogsForExercise(state.currentExercise.id);
+        state.lastLog = logs.length > 0 ? logs[0] : null;
+        
+        if (document.getElementById('screen-log').classList.contains('active')) {
+            if (state.lastLog) {
+                document.getElementById('use-last-bar').style.display = 'flex';
+                document.getElementById('last-weight-val').innerText = state.lastLog.weight;
+                document.getElementById('last-reps-val').innerText = state.lastLog.reps;
+            } else {
+                document.getElementById('use-last-bar').style.display = 'none';
+            }
+        }
+        if (document.getElementById('screen-stats').classList.contains('active')) {
+            this.showStats(); 
+        }
     },
 
     // Bottom Nav - Global Progress 

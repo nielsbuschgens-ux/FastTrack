@@ -51,7 +51,10 @@
             <header class="top-nav" style="justify-content: space-between; padding: 16px 24px;">
                 <div class="app-header" style="padding: 0; text-align: left;">
                     <h1 style="margin-left: -2px;">FASTTRACK.</h1>
-                    <p>Welkom, <span id="display-username">--</span></p>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span class="sync-status" id="sync-indicator"></span>
+                        <p style="margin: 0;">Welkom, <span id="display-username">--</span></p>
+                    </div>
                 </div>
                 <div style="display: flex; gap: 8px; margin-right: -8px;">
                     <button class="icon-btn" id="theme-toggle-btn" onclick="app.toggleTheme()" title="Wissel Thema" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255,255,255,0.1);">
@@ -124,9 +127,14 @@
                     <ion-icon name="chevron-back-outline"></ion-icon>
                 </button>
                 <h2 id="workout-title">Push Workout</h2>
-                <button class="icon-btn" onclick="app.showAddExerciseForm()">
-                    <ion-icon name="add-outline"></ion-icon>
-                </button>
+                <div style="display: flex; gap: 4px;">
+                    <button class="icon-btn" onclick="app.manualSyncExercises()" style="font-size: 1.4rem;">
+                        <ion-icon name="sync-outline"></ion-icon>
+                    </button>
+                    <button class="icon-btn" onclick="app.showAddExerciseForm()">
+                        <ion-icon name="add-outline"></ion-icon>
+                    </button>
+                </div>
             </header>
 
             <div id="add-ex-container" style="display: none; padding: 0 16px 16px 16px;">
