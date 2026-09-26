@@ -2,20 +2,23 @@ require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 
-// Ensure public directory exists
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_KEY || '';
+const demoMode = !supabaseUrl || !supabaseKey;
+
 if (!fs.existsSync('public')) {
     fs.mkdirSync('public', { recursive: true });
 }
 
 const config = `window.APP_CONFIG = {
-  SUPABASE_URL: '${process.env.SUPABASE_URL || ""}',
-  SUPABASE_KEY: '${process.env.SUPABASE_KEY || ""}'
+  DEMO_MODE: ${demoMode},
+  SUPABASE_URL: '${supabaseUrl}',
+  SUPABASE_KEY: '${supabaseKey}'
 };`;
 
 fs.writeFileSync(path.join('public', 'config.js'), config);
-console.log('✅ Generated config.js in public folder.');
+console.log(demoMode ? '✅ Demo mode — config.js generated (no Supabase).' : '✅ Supabase config.js generated.');
 
-// Copy necessary files to public directory
 const filesToCopy = ['index.html', 'app.js', 'styles.css'];
 filesToCopy.forEach(file => {
     if (fs.existsSync(file)) {

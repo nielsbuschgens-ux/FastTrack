@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "node generate-config.js"
+    "build": "node generate-config.js",
+    "start": "npm run build && npx --yes serve public -l 3000",
+    "dev": "npx --yes serve . -l 3000"
   },
   "keywords": [],
   "author": "",
