@@ -413,13 +413,189 @@ body {
     align-items: center;
     gap: 10px;
     box-shadow: 0 10px 30px rgba(0, 255, 163, 0.4);
-    transition: bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transition: bottom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.3s, box-shadow 0.3s;
     z-index: 100;
     pointer-events: none;
 }
 
 .toast.show {
     bottom: 50px;
+}
+
+/* PR Toast — goud */
+.toast.toast-pr {
+    background: linear-gradient(135deg, #ffd700, #ffaa00);
+    color: #1a1000;
+    box-shadow: 0 10px 40px rgba(255, 200, 0, 0.5);
+}
+
+/* Volume badge — in de header van het log-scherm */
+.volume-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+    opacity: 0.85;
+}
+
+/* Sessie volume — boven de log-knop */
+.session-volume-badge {
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.03em;
+    padding: 2px 0 4px;
+}
+
+/* 1RM display — boven de log-knop */
+.one-rm-display {
+    text-align: center;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--primary);
+    min-height: 20px;
+    letter-spacing: 0.02em;
+}
+
+/* Workout Afsluiten knop op het oefeningen-scherm */
+.finish-workout-btn {
+    width: 100%;
+    background: rgba(0, 255, 163, 0.08);
+    color: var(--accent);
+    border: 1.5px solid rgba(0, 255, 163, 0.25);
+    padding: 16px;
+    border-radius: 16px;
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: inherit;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.finish-workout-btn:active {
+    background: rgba(0, 255, 163, 0.18);
+    transform: scale(0.97);
+}
+
+/* --- Finish Screen --- */
+.finish-screen {
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+    overflow-y: auto;
+}
+
+.finish-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    width: 100%;
+    max-width: 400px;
+    padding-bottom: 32px;
+}
+
+.finish-emoji {
+    font-size: 4rem;
+    animation: pop-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+@keyframes pop-in {
+    0% { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.finish-title {
+    font-size: 2.2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--primary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center;
+    letter-spacing: -1px;
+}
+
+.finish-subtitle {
+    color: var(--text-muted);
+    font-size: 1rem;
+    font-weight: 500;
+    text-align: center;
+    margin-top: -10px;
+}
+
+.finish-stats-row {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+}
+
+.finish-stat-card {
+    flex: 1;
+    text-align: center;
+    padding: 20px 12px;
+    cursor: default;
+}
+
+.finish-stat-card small {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.finish-stat-card h2 {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--accent);
+    margin-top: 6px;
+}
+
+.finish-exercise-breakdown {
+    width: 100%;
+    padding: 20px;
+    cursor: default;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.finish-breakdown-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+.finish-exercise-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.finish-exercise-row:last-child {
+    border-bottom: none;
+}
+
+.finish-ex-name {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.finish-ex-stats {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent);
 }
 
 /* Rest timer — linksboven na set loggen */

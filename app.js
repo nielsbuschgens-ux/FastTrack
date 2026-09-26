@@ -318,7 +318,14 @@ const state = {
     exercisesChannel: null,
     logsChannel: null,
     restTimerId: null,
-    restSecondsLeft: 0
+    restSecondsLeft: 0,
+    // Session tracking
+    sessionVolume: 0,           // totaal kg verplaatst deze sessie
+    sessionSets: 0,             // totaal sets deze sessie
+    sessionExercises: {},       // { exerciseId: { name, volume, sets } }
+    exerciseVolume: 0,          // volume voor huidige oefening
+    exerciseSets: 0,            // sets voor huidige oefening
+    allTimePRs: {}              // { exerciseId: maxWeight }
 };
 
 // --- 3. UI Logic ---
@@ -1117,9 +1124,19 @@ const app = {
         state.currentExercise = exercise;
         document.getElementById('exercise-title').innerText = exercise.name;
 
-        // Fetch last log for suggestion
+        // Reset per-oefening volume counters
+        const existing = state.sessionExercises[exercise.id];
+        state.exerciseVolume = existing ? existing.volume : 0;
+        state.exerciseSets = existing ? existing.sets : 0;
+
+        // Fetch all logs to determine all-time PR
         const logs = await DB.getLogsForExercise(exercise.id);
         state.lastLog = logs.length > 0 ? logs[0] : null;
+
+        // Bepaal all-time PR voor deze oefening
+        if (logs.length > 0) {
+            state.allTimePRs[exercise.id] = Math.max(...logs.map(l => l.weight));
+        }
 
         if (state.lastLog) {
             state.weight = state.lastLog.weight;
@@ -1134,13 +1151,51 @@ const app = {
         }
 
         this.updateCounters();
+        this.updateVolumeBadge();
         this.navTo('log');
+    },
+
+    // --- Helpers ---
+    vibrate(pattern = 40) {
+        if (navigator.vibrate) navigator.vibrate(pattern);
+    },
+
+    calculate1RM(weight, reps) {
+        if (reps === 1) return weight;
+        if (reps <= 0 || weight <= 0) return 0;
+        // Epley formula: 1RM = weight * (1 + reps / 30)
+        return Math.round(weight * (1 + reps / 30));
+    },
+
+    triggerConfetti(origin = { x: 0.5, y: 0.6 }) {
+        if (typeof confetti !== 'function') return;
+        confetti({
+            particleCount: 120,
+            spread: 80,
+            origin,
+            colors: ['#00ffa3', '#6366f1', '#ffffff', '#ffd700'],
+            zIndex: 9999
+        });
+    },
+
+    updateVolumeBadge() {
+        // Per oefening
+        const exVol = document.getElementById('exercise-volume-badge');
+        if (exVol) {
+            exVol.innerText = `${state.exerciseSets} sets · ${state.exerciseVolume.toLocaleString('nl-NL')} kg`;
+        }
+        // Totaal sessie
+        const sesVol = document.getElementById('session-volume-badge');
+        if (sesVol) {
+            sesVol.innerText = `Sessie: ${state.sessionSets} sets · ${state.sessionVolume.toLocaleString('nl-NL')} kg`;
+        }
     },
 
     updateWeight(delta) {
         const newVal = Math.round((state.weight + delta) * 10) / 10;
         if (newVal >= 0 && newVal <= 300) {
             state.weight = newVal;
+            this.vibrate(20);
             this.updateCounters();
         }
     },
@@ -1149,6 +1204,7 @@ const app = {
         const newVal = state.reps + delta;
         if (newVal >= 0 && newVal <= 50) {
             state.reps = newVal;
+            this.vibrate(20);
             this.updateCounters();
         }
     },
@@ -1156,6 +1212,10 @@ const app = {
     updateCounters() {
         document.getElementById('current-weight').innerText = state.weight;
         document.getElementById('current-reps').innerText = state.reps;
+        // Live 1RM
+        const oneRM = this.calculate1RM(state.weight, state.reps);
+        const el = document.getElementById('one-rm-display');
+        if (el) el.innerText = oneRM > 0 ? `Est. 1RM: ${oneRM} kg` : '';
     },
 
     useLastWeight() {
@@ -1173,16 +1233,49 @@ const app = {
     },
 
     async submitLog() {
-        await DB.saveLog({
-            exerciseId: state.currentExercise.id,
-            weight: state.weight,
-            reps: state.reps
-        });
+        const exId = state.currentExercise.id;
+        const exName = state.currentExercise.name;
+        const weight = state.weight;
+        const reps = state.reps;
+        const volume = weight * reps;
 
-        this.showToast('Set Opgeslagen 🚀');
+        // --- PR detectie (voor opslaan controleren we de huidige PR) ---
+        const prevPR = state.allTimePRs[exId] || 0;
+        const isPR = weight > prevPR && reps > 0 && weight > 0;
+        if (isPR) state.allTimePRs[exId] = weight;
+
+        await DB.saveLog({ exerciseId: exId, weight, reps });
+
+        // --- Haptic ---
+        this.vibrate(isPR ? [60, 40, 60] : 80);
+
+        // --- Volume bijhouden ---
+        state.sessionVolume += volume;
+        state.sessionSets += 1;
+        state.exerciseVolume += volume;
+        state.exerciseSets += 1;
+
+        // Per-oefening opslaan in sessionExercises
+        if (!state.sessionExercises[exId]) {
+            state.sessionExercises[exId] = { name: exName, volume: 0, sets: 0 };
+        }
+        state.sessionExercises[exId].volume += volume;
+        state.sessionExercises[exId].sets += 1;
+
+        this.updateVolumeBadge();
+
+        // --- PR toast of normale toast ---
+        if (isPR) {
+            this.showToast('🏆 Personal Record! ' + weight + ' kg', true);
+            this.triggerConfetti();
+        } else {
+            this.showToast('Set Opgeslagen 🚀');
+        }
+
         this.startRestTimer(180);
+
         // Feedback cycle: update lastLog context
-        const logs = await DB.getLogsForExercise(state.currentExercise.id);
+        const logs = await DB.getLogsForExercise(exId);
         state.lastLog = logs[0];
         document.getElementById('use-last-bar').style.display = 'flex';
         document.getElementById('last-weight-val').innerText = state.lastLog.weight;
@@ -1271,11 +1364,15 @@ const app = {
         }
     },
 
-    showToast(msg = 'Set Opgeslagen 🚀') {
+    showToast(msg = 'Set Opgeslagen 🚀', isPR = false) {
         const toast = document.getElementById('toast');
         document.getElementById('toast-msg').innerText = msg;
+        toast.classList.toggle('toast-pr', isPR);
         toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 1500);
+        setTimeout(() => {
+            toast.classList.remove('show');
+            toast.classList.remove('toast-pr');
+        }, isPR ? 2500 : 1500);
     },
 
     // Screen 3 -> Screen 4 (Stats)
@@ -1340,6 +1437,47 @@ const app = {
                 <h3>${best} kg</h3>
             </div>
         `;
+    },
+
+    finishWorkout() {
+        // Bouw samenvatting op
+        const exercises = Object.values(state.sessionExercises);
+        const totalVolume = state.sessionVolume;
+        const totalSets = state.sessionSets;
+
+        let exerciseRows = '';
+        if (exercises.length === 0) {
+            exerciseRows = '<p style="color: var(--text-muted); text-align:center;">Geen sets gelogd deze sessie.</p>';
+        } else {
+            exerciseRows = exercises.map(ex => `
+                <div class="finish-exercise-row">
+                    <span class="finish-ex-name">${ex.name}</span>
+                    <span class="finish-ex-stats">${ex.sets} sets · ${ex.volume.toLocaleString('nl-NL')} kg</span>
+                </div>
+            `).join('');
+        }
+
+        document.getElementById('finish-total-volume').innerText = totalVolume.toLocaleString('nl-NL') + ' kg';
+        document.getElementById('finish-total-sets').innerText = totalSets;
+        document.getElementById('finish-exercise-list').innerHTML = exerciseRows;
+
+        this.dismissRestTimer();
+        this.navTo('finish');
+
+        // Confetti na korte delay zodat scherm eerst rendert
+        if (totalSets > 0) {
+            setTimeout(() => this.triggerConfetti({ x: 0.5, y: 0.4 }), 300);
+        }
+    },
+
+    resetSession() {
+        state.sessionVolume = 0;
+        state.sessionSets = 0;
+        state.sessionExercises = {};
+        state.exerciseVolume = 0;
+        state.exerciseSets = 0;
+        this.updateVolumeBadge();
+        this.navTo('launch');
     }
 };
 

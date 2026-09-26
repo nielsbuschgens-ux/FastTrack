@@ -11,6 +11,8 @@
     <!-- Ionicons for SVG icons -->
     <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
     <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+    <!-- Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 </head>
 
 <body>
@@ -205,6 +207,14 @@
             <div class="list-container" id="exercise-list">
                 <!-- Exercises injected via JS -->
             </div>
+
+            <!-- Workout Afsluiten -->
+            <div class="action-dock" style="padding-top: 0;">
+                <button class="finish-workout-btn" onclick="app.finishWorkout()">
+                    <ion-icon name="flag-outline"></ion-icon>
+                    Workout Afsluiten
+                </button>
+            </div>
         </main>
 
         <!-- 3) Exercise Log Screen -->
@@ -213,7 +223,10 @@
                 <button class="icon-btn" onclick="app.navTo('workout')">
                     <ion-icon name="chevron-back-outline"></ion-icon>
                 </button>
-                <h2 id="exercise-title">Bench Press</h2>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                    <h2 id="exercise-title">Bench Press</h2>
+                    <span id="exercise-volume-badge" class="volume-badge">0 sets · 0 kg</span>
+                </div>
                 <button class="icon-btn" onclick="app.showStats()">
                     <ion-icon name="stats-chart-outline"></ion-icon>
                 </button>
@@ -266,6 +279,10 @@
 
             <!-- Action Area -->
             <div class="action-dock" style="display: flex; flex-direction: column; gap: 8px;">
+                <!-- 1RM display -->
+                <div id="one-rm-display" class="one-rm-display"></div>
+                <!-- Sessie volume -->
+                <div id="session-volume-badge" class="session-volume-badge">Sessie: 0 sets · 0 kg</div>
                 <button id="log-btn" class="log-action-btn" onclick="app.submitLog()">
                     Log Set / Next
                     <ion-icon name="checkmark-done-outline"></ion-icon>
@@ -294,6 +311,38 @@
                 <div class="stats-summary" id="stats-summary">
                     <!-- Stats summary injected here -->
                 </div>
+            </div>
+        </main>
+
+        <!-- 5) Workout Finish Screen -->
+        <main id="screen-finish" class="screen finish-screen">
+            <div class="finish-content">
+                <div class="finish-emoji">🏁</div>
+                <h1 class="finish-title">Workout Klaar!</h1>
+                <p class="finish-subtitle">Goed gedaan, je hebt het gevloerd! 💪</p>
+
+                <div class="finish-stats-row">
+                    <div class="finish-stat-card glass-card">
+                        <small>TOTAAL VOLUME</small>
+                        <h2 id="finish-total-volume">0 kg</h2>
+                    </div>
+                    <div class="finish-stat-card glass-card">
+                        <small>TOTAAL SETS</small>
+                        <h2 id="finish-total-sets">0</h2>
+                    </div>
+                </div>
+
+                <div class="finish-exercise-breakdown glass-card">
+                    <h3 class="finish-breakdown-title">Per oefening</h3>
+                    <div id="finish-exercise-list">
+                        <!-- Injected by JS -->
+                    </div>
+                </div>
+
+                <button class="log-action-btn" onclick="app.resetSession()" style="margin-top: 8px;">
+                    <ion-icon name="home-outline"></ion-icon>
+                    Terug naar Home
+                </button>
             </div>
         </main>
 
