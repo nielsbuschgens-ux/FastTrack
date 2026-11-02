@@ -311,7 +311,9 @@ const MAX_WEIGHT = 500;
 const PLATE_MODE_KEY = 'fasttrack_plate_mode';   // { exerciseId: true } per oefening
 const PLATE_SIZES = [25, 20, 15, 10, 5, 2.5, 1.25];
 const WEEK_GOAL_KEY = 'fasttrack_week_goal';
-const PROGRESSION_STEP = 2.5;   // kg erbij als alle werksets vorige keer gehaald zijn
+const PROGRESSION_STEP = 2.5;   // standaard kg erbij als alle werksets vorige keer gehaald zijn
+const STEP_OPTIONS = [1, 2, 2.5, 5];
+const STEP_KEY = 'fasttrack_progression_steps';   // { exerciseId: kg } per oefening
 const MAX_REPS = 100;
 const SPLITS = ['Push', 'Pull', 'Legs'];
 const EXERCISE_SUGGESTIONS = {
@@ -974,7 +976,30 @@ const app = {
     // Progressie t.o.v. vorige keer (double progression):
     // alle werksets (zwaarste gewicht) gehaald → gewicht omhoog, anders 1 rep erbij op de sets die tekort kwamen.
     // Bodyweight (0 kg) → 1 rep erbij. Geeft per set van vorige keer een doel terug.
-    getProgression(prev) {
+    getProgressionStep(exId) {
+        try {
+            const step = (JSON.parse(localStorage.getItem(STEP_KEY)) || {})[exId];
+            return STEP_OPTIONS.includes(step) ? step : PROGRESSION_STEP;
+        } catch { return PROGRESSION_STEP; }
+    },
+
+    // Eén tik = volgende stapgrootte (1 → 2 → 2,5 → 5 → 1), per oefening bewaard
+    cycleProgressionStep() {
+        if (!state.currentExercise) return;
+        const exId = state.currentExercise.id;
+        const current = this.getProgressionStep(exId);
+        const next = STEP_OPTIONS[(STEP_OPTIONS.indexOf(current) + 1) % STEP_OPTIONS.length];
+        let steps;
+        try { steps = JSON.parse(localStorage.getItem(STEP_KEY)) || {}; } catch { steps = {}; }
+        if (next === PROGRESSION_STEP) delete steps[exId];
+        else steps[exId] = next;
+        localStorage.setItem(STEP_KEY, JSON.stringify(steps));
+        this.vibrate(15);
+        if (!state.dirty) this.prepareNextSet();
+        this.renderLogScreen();
+    },
+
+    getProgression(prev, step = PROGRESSION_STEP) {
         if (!prev || prev.sets.length === 0) return null;
         const sets = prev.sets.map(s => ({ weight: Number(s.weight), reps: Number(s.reps) }));
         const top = Math.max(...sets.map(s => s.weight));
@@ -985,7 +1010,7 @@ const app = {
             return { type: 'reps', targets: sets.map(s => ({ weight: 0, reps: Math.min(s.reps + 1, MAX_REPS) })) };
         }
         if (working.every(s => s.reps >= targetReps)) {
-            const next = Math.min(top + PROGRESSION_STEP, MAX_WEIGHT);
+            const next = Math.min(top + step, MAX_WEIGHT);
             return {
                 type: 'weight',
                 from: top,
@@ -1002,7 +1027,7 @@ const app = {
     // Slimme suggestie: progressiedoel van vandaag, gewicht volgt je vorige set vandaag
     suggestNextSet(exId) {
         const entries = this.sessionEntries(exId);
-        const prog = this.getProgression(this.getPreviousSession(exId));
+        const prog = this.getProgression(this.getPreviousSession(exId), this.getProgressionStep(exId));
         const n = entries.length;
         const target = prog ? prog.targets[n] : null;
 
@@ -1622,7 +1647,7 @@ const app = {
         document.getElementById('log-btn-label').innerText = `Log set ${setNr}`;
 
         const target = prev ? prev.sets[entries.length] : null;
-        const prog = this.getProgression(prev);
+        const prog = this.getProgression(prev, this.getProgressionStep(exId));
         const goal = prog ? prog.targets[entries.length] : null;
         const hintEl = document.getElementById('set-hint');
         if (target) {
@@ -1640,9 +1665,14 @@ const app = {
         const banner = document.getElementById('progress-banner');
         if (prog && entries.length === 0) {
             banner.hidden = false;
-            banner.innerHTML = prog.type === 'weight'
-                ? `<strong>+${formatKg(prog.to - prog.from)} kg</strong> Vorige keer alle sets gehaald op ${formatKg(prog.from)} kg`
-                : `<strong>+1 rep</strong> Eén rep meer op de sets waar je vorige keer tekort kwam`;
+            const text = prog.type === 'weight'
+                ? `<strong>+${formatKg(prog.to - prog.from)} kg</strong><span class="banner-text">Vorige keer alle sets gehaald op ${formatKg(prog.from)} kg</span>`
+                : `<strong>+1 rep</strong><span class="banner-text">Eén rep meer op de sets waar je vorige keer tekort kwam</span>`;
+            const step = this.getProgressionStep(exId);
+            banner.innerHTML = text + (prog.type === 'weight' || prev.sets.some(s => Number(s.weight) > 0)
+                ? `<button class="step-chip" onclick="app.cycleProgressionStep()" aria-label="Stapgrootte wijzigen, nu ${formatKg(step)} kg">
+                       <span class="step-chip-label">Stap</span>${formatKg(step)} kg</button>`
+                : '');
         } else {
             banner.hidden = true;
         }

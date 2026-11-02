@@ -959,6 +959,44 @@ body {
     color: var(--text);
 }
 
+.banner-text {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Stapgrootte progressie, tik = volgende optie */
+.step-chip {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 56px;
+    min-height: 44px;
+    padding: 2px 8px;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font-cond);
+    font-weight: 700;
+    font-size: 1rem;
+    line-height: 1.1;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.step-chip:active {
+    transform: scale(0.94);
+}
+
+.step-chip-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+}
+
 .progress-banner strong {
     flex-shrink: 0;
     font-family: var(--font-display);
