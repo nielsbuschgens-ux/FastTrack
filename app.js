@@ -126,6 +126,7 @@ function createLocalDB() {
                 user_id: session.user.id,
                 name: exercise.name,
                 category: exercise.category,
+                days: exercise.days || [exercise.category],
                 created_at: new Date().toISOString()
             };
             const exercises = LocalStore.getExercises();
@@ -137,6 +138,15 @@ function createLocalDB() {
         async deleteExercise(id) {
             LocalStore.setExercises(LocalStore.getExercises().filter(ex => ex.id !== id));
             LocalStore.setLogs(LocalStore.getLogs().filter(l => l.exercise_id !== id));
+        },
+
+        async updateExerciseDays(id, days) {
+            LocalStore.setExercises(LocalStore.getExercises().map(ex => ex.id === id ? { ...ex, days, category: days[0] } : ex));
+        },
+
+        async saveScheme(scheme) {
+            const user = LocalStore.getUser();
+            if (user) LocalStore.setUser({ ...user, user_metadata: { ...user.user_metadata, fasttrack_scheme: scheme } });
         },
 
         async updateExerciseMuscles(id, muscles) {
@@ -276,7 +286,8 @@ function createSupabaseDB() {
                 .insert({
                     user_id: session.user.id,
                     name: exercise.name,
-                    category: exercise.category
+                    category: exercise.category,
+                    days: exercise.days || [exercise.category]
                 })
                 .select();
 
@@ -301,6 +312,28 @@ function createSupabaseDB() {
                 console.error("Delete Exercise Error:", error);
                 throw error;
             }
+        },
+
+        // days: dagen waarop de oefening staat; category volgt de eerste dag
+        async updateExerciseDays(id, days) {
+            const session = await this.getSession();
+            if (!session) return;
+
+            const { error } = await supabaseClient
+                .from('fitness_exercises')
+                .update({ days, category: days[0] })
+                .eq('id', id)
+                .eq('user_id', session.user.id);
+
+            if (error) {
+                console.error("Update Days Error:", error);
+                throw error;
+            }
+        },
+
+        async saveScheme(scheme) {
+            const { error } = await supabaseClient.auth.updateUser({ data: { fasttrack_scheme: scheme } });
+            if (error) console.error("Save Scheme Error:", error);
         },
 
         // muscles: { primary, secondary: [] } of null (= automatisch herkennen)
@@ -336,12 +369,64 @@ const PROGRESSION_STEP = 2.5;   // standaard kg erbij als alle werksets vorige k
 const STEP_OPTIONS = [1, 2, 2.5, 5];
 const STEP_KEY = 'fasttrack_progression_steps';   // { exerciseId: kg } per oefening
 const MAX_REPS = 100;
-const SPLITS = ['Push', 'Pull', 'Legs'];
+// Trainingsschema's: welke dagen er op het startscherm staan
+const SCHEMES = {
+    ppl: { label: 'Push / Pull / Legs', days: ['Push', 'Pull', 'Legs'] },
+    ul: { label: 'Upper / Lower', days: ['Upper', 'Lower'] },
+    fb: { label: 'Full Body', days: ['Full Body'] },
+    fbab: { label: 'Full Body A/B', days: ['Full Body A', 'Full Body B'] },
+    bro: { label: 'Spiergroep-split', days: ['Borst', 'Rug', 'Benen', 'Schouders', 'Armen'] }
+};
+const DEFAULT_SCHEME = 'ppl';
+const SCHEME_KEY = 'fasttrack_scheme';
+
+// Soort dag → icoon, suggesties en spierherkenning
+const DAY_GROUP = {
+    Push: 'push', Upper: 'push', Borst: 'push', Schouders: 'push',
+    Pull: 'pull', Rug: 'pull',
+    Legs: 'legs', Lower: 'legs', Benen: 'legs',
+    'Full Body': 'full', 'Full Body A': 'full', 'Full Body B': 'full', Armen: 'arms'
+};
+
+const DAY_ICONS = {
+    push: '<path d="M13 5v3c0 .5-.5 1-1 1H8c-2.5 0-4 1.5-4.5 3.5-.2 1 .3 2.5 1 3.5.5.8 1.5 1.5 2.5 1.5.5 0 1 .5 1 1v6c0 1.5 1 2.5 2.5 2.5h11c1.5 0 2.5-1 2.5-2.5v-6c0-.5.5-1 1-1 1 0 2-.7 2.5-1.5.7-1 1.2-2.5 1-3.5C28 10.5 26.5 9 24 9h-4c-.5 0-1-.5-1-1V5" /><path d="M10.5 15.5c2 1 3.5 1 5.5 1s3.5 0 5.5-1" /><path d="M16 11v5" /><path d="M16 16v9" /><path d="M13 18h6" /><path d="M13 21h6" /><path d="M13 24h6" />',
+    pull: '<path d="M14 6v3" /><path d="M18 6v3" /><path d="M14 9H8c-2 0-3 1.5-4 3 0 0-2 4 1 6 1 .7 2 1 3 1 .5 0 1 .5 1 1v6c0 1.5 1 2.5 2.5 2.5h9c1.5 0 2.5-1 2.5-2.5v-6c0-.5.5-1 1-1 1 0 2-.3 3-1 3-2 1-6 1-6-1-1.5-2-3-4-3h-6" /><path d="M8 13c3 4 5 10 5.5 14" /><path d="M24 13c-3 4-5 10-5.5 14" /><path d="M16 9v18" /><path d="M16 14L10 9" /><path d="M16 14l6-5" />',
+    legs: '<path d="M16 4c3 3 5 8 3 12" /><path d="M11 4c-1 4-1 9 2 12" /><path d="M13 5c1 3 2 7 1 10" /><circle cx="15.5" cy="18" r="2.5" /><path d="M18 18c3 3 3 6 1 9" /><path d="M13 18c-1 4-1 8 0 10" /><path d="M13 28h7c2 0 3 1 3 2H11c0-1 1-2 2-2z" />',
+    full: '<path d="M4 13v6" /><path d="M7 10v12" /><path d="M25 10v12" /><path d="M28 13v6" /><path d="M7 16h18" />',
+    arms: '<path d="M4 13v6" /><path d="M7 10v12" /><path d="M25 10v12" /><path d="M28 13v6" /><path d="M7 16h18" />'
+};
+
+// Bij spiergroep-split: welke dag hoort bij welke spier
+const BRO_DAY_FOR_MUSCLE = {
+    borst: 'Borst', lats: 'Rug', bovenrug: 'Rug', onderrug: 'Rug',
+    schouder_voor: 'Schouders', schouder_zij: 'Schouders', schouder_achter: 'Schouders',
+    biceps: 'Armen', triceps: 'Armen',
+    quads: 'Benen', hamstrings: 'Benen', billen: 'Benen', kuiten: 'Benen', buik: 'Benen'
+};
+
+// Dagen waarop een oefening staat (oude rijen zonder days: alleen category)
+function exDays(ex) {
+    return Array.isArray(ex.days) && ex.days.length > 0 ? ex.days : [ex.category];
+}
+
+function currentDays() {
+    return (SCHEMES[state.scheme] || SCHEMES[DEFAULT_SCHEME]).days;
+}
 const EXERCISE_SUGGESTIONS = {
     Push: ['Bench Press', 'Incline Bench Press', 'Incline Dumbbell Press', 'Dumbbell Bench Press', 'Shoulder Press', 'Dumbbell Shoulder Press', 'Lateral Raise', 'Chest Fly', 'Cable Crossover', 'Dips', 'Tricep Pushdown', 'Overhead Tricep Extension', 'Skull Crushers', 'Push Ups'],
     Pull: ['Pull Ups', 'Chin Ups', 'Lat Pulldown', 'Barbell Row', 'Dumbbell Row', 'Seated Cable Row', 'T-Bar Row', 'Face Pull', 'Rear Delt Fly', 'Deadlift', 'Bicep Curl', 'Hammer Curl', 'Preacher Curl', 'Shrugs'],
-    Legs: ['Squat', 'Front Squat', 'Leg Press', 'Romanian Deadlift', 'Hamstring Curl', 'Leg Extension', 'Bulgarian Split Squat', 'Lunges', 'Hip Thrust', 'Calf Raise', 'Hack Squat', 'Goblet Squat']
+    Legs: ['Squat', 'Front Squat', 'Leg Press', 'Romanian Deadlift', 'Hamstring Curl', 'Leg Extension', 'Bulgarian Split Squat', 'Lunges', 'Hip Thrust', 'Calf Raise', 'Hack Squat', 'Goblet Squat'],
+    Armen: ['Bicep Curl', 'Hammer Curl', 'Preacher Curl', 'Bayesian Curl', 'Tricep Pushdown', 'Overhead Tricep Extension', 'Skull Crushers', 'Dips']
 };
+
+function suggestionsForDay(day) {
+    const g = DAY_GROUP[day];
+    if (g === 'push') return EXERCISE_SUGGESTIONS.Push;
+    if (g === 'pull') return EXERCISE_SUGGESTIONS.Pull;
+    if (g === 'legs') return EXERCISE_SUGGESTIONS.Legs;
+    if (g === 'arms') return EXERCISE_SUGGESTIONS.Armen;
+    return [...EXERCISE_SUGGESTIONS.Push, ...EXERCISE_SUGGESTIONS.Pull, ...EXERCISE_SUGGESTIONS.Legs];
+}
 
 function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -383,7 +468,8 @@ function formatInputNumber(n) {
 }
 
 const state = {
-    currentCategory: null,
+    currentCategory: null,      // gekozen dag (bijv. "Push" of "Full Body A")
+    scheme: localStorage.getItem(SCHEME_KEY) || DEFAULT_SCHEME,
     currentExercise: null,
     weight: 0,
     reps: 0,
@@ -513,7 +599,8 @@ const Muscles = {
         const n = String(name || '').toLowerCase().replace(/[-_/().,]+/g, ' ').replace(/\s+/g, ' ').trim();
         for (const rule of MUSCLE_RULES) {
             if (!rule.re.test(n)) continue;
-            const variant = (category === 'Legs' && rule.legs) || (category === 'Pull' && rule.pull) || rule;
+            const groups = (Array.isArray(category) ? category : [category]).map(d => DAY_GROUP[d]);
+            const variant = (groups.includes('legs') && rule.legs) || (groups.includes('pull') && rule.pull) || rule;
             return { primary: variant.primary, secondary: variant.secondary || [] };
         }
         return null;
@@ -525,7 +612,7 @@ const Muscles = {
         if (m && MUSCLES[m.primary]) {
             return { primary: m.primary, secondary: (m.secondary || []).filter(k => MUSCLES[k] && k !== m.primary), manual: true };
         }
-        const auto = ex ? this.detect(ex.name, ex.category) : null;
+        const auto = ex ? this.detect(ex.name, exDays(ex)) : null;
         return auto ? { ...auto, manual: false } : null;
     },
 
@@ -925,6 +1012,12 @@ const app = {
             this.updateSyncIndicator(true);
         }
 
+        const savedScheme = user.user_metadata && user.user_metadata.fasttrack_scheme;
+        if (SCHEMES[savedScheme]) {
+            state.scheme = savedScheme;
+            localStorage.setItem(SCHEME_KEY, savedScheme);
+        }
+
         const displayName = (user.user_metadata && user.user_metadata.full_name) || (user.email ? user.email.split('@')[0] : 'Demo');
         document.getElementById('display-username').innerText = displayName;
 
@@ -1076,8 +1169,50 @@ const app = {
     },
 
     // --- Data helpers ---
-    exercisesForCategory(category) {
-        return (DB.exercises || []).filter(ex => ex.category === category);
+    exercisesForCategory(day) {
+        return (DB.exercises || []).filter(ex => exDays(ex).includes(day));
+    },
+
+    findExerciseByName(name) {
+        const key = name.trim().toLowerCase();
+        return (DB.exercises || []).find(ex => ex.name.trim().toLowerCase() === key) || null;
+    },
+
+    // Dag uit het huidige schema waar een spiergroep thuishoort (voor tips)
+    dayForMuscle(k) {
+        const days = currentDays();
+        if (days.length === 1) return days[0];
+        if (state.scheme === 'bro') return BRO_DAY_FOR_MUSCLE[k];
+        const group = MUSCLE_SUGGESTIONS[k].split.toLowerCase();
+        return days.find(d => DAY_GROUP[d] === group)
+            || days.find(d => DAY_GROUP[d] === (group === 'legs' ? 'legs' : 'push'))
+            || days[0];
+    },
+
+    // Welke dag is er op een datum getraind? De dag met de meeste sets van zijn oefeningen.
+    // (Logs bevatten geen dag; gedeelde oefeningen tellen voor alle dagen mee.)
+    lastTrainedByDay(days) {
+        const perDate = {};
+        (DB.exercises || []).forEach(ex => {
+            const exD = exDays(ex).filter(d => days.includes(d));
+            if (exD.length === 0) return;
+            (state.logsCache[ex.id] || []).forEach(l => {
+                const date = new Date(l.created_at);
+                const key = dayKey(date);
+                const entry = perDate[key] || (perDate[key] = { date, score: {} });
+                if (date > entry.date) entry.date = date;
+                exD.forEach(d => { entry.score[d] = (entry.score[d] || 0) + (exD.length === 1 ? 1 : 0.5); });
+            });
+        });
+        const last = {};
+        days.forEach(d => { last[d] = null; });
+        Object.values(perDate).forEach(({ date, score }) => {
+            const max = Math.max(...Object.values(score));
+            Object.keys(score).filter(d => score[d] === max).forEach(d => {
+                if (!last[d] || date > last[d]) last[d] = date;
+            });
+        });
+        return last;
     },
 
     cacheLogs(exId, logs) {
@@ -1227,21 +1362,14 @@ const app = {
 
     // --- Screen 1: Launch ---
     renderLaunch() {
-        const lastBySplit = {};
-        SPLITS.forEach(s => { lastBySplit[s] = null; });
-        (DB.exercises || []).forEach(ex => {
-            const logs = state.logsCache[ex.id];
-            if (!logs || logs.length === 0 || !(ex.category in lastBySplit)) return;
-            const t = new Date(logs[0].created_at);
-            if (!lastBySplit[ex.category] || t > lastBySplit[ex.category]) lastBySplit[ex.category] = t;
-        });
-
+        const days = currentDays();
+        const lastBySplit = this.lastTrainedByDay(days);
         const sessionActive = state.sessionSets > 0;
 
-        // Aanbevolen: split die het langst niet getraind is
+        // Aanbevolen: dag die het langst niet getraind is (alleen als er iets te kiezen valt)
         let recommended = null;
-        if (!sessionActive && Object.values(lastBySplit).some(Boolean)) {
-            recommended = SPLITS.reduce((best, s) => {
+        if (!sessionActive && days.length > 1 && Object.values(lastBySplit).some(Boolean)) {
+            recommended = days.reduce((best, s) => {
                 if (best === null) return s;
                 const a = lastBySplit[s] ? lastBySplit[s].getTime() : -Infinity;
                 const b = lastBySplit[best] ? lastBySplit[best].getTime() : -Infinity;
@@ -1249,15 +1377,27 @@ const app = {
             }, null);
         }
 
-        SPLITS.forEach(s => {
-            const meta = document.getElementById(`split-meta-${s}`);
-            if (meta) meta.innerText = lastBySplit[s] ? `Laatst ${daysAgoLabel(lastBySplit[s])}` : 'Nog niet getraind';
-            const btn = document.getElementById(`split-btn-${s}`);
-            if (btn) {
-                btn.classList.toggle('recommended', s === recommended);
-                btn.classList.toggle('in-progress', sessionActive && s === state.currentCategory);
-            }
-        });
+        const select = document.getElementById('scheme-select');
+        if (select) {
+            select.innerHTML = Object.entries(SCHEMES)
+                .map(([key, s]) => `<option value="${key}"${key === state.scheme ? ' selected' : ''}>${s.label}</option>`).join('');
+        }
+
+        document.getElementById('split-container').innerHTML = days.map((s, i) => {
+            const count = this.exercisesForCategory(s).length;
+            const meta = lastBySplit[s] ? `Laatst ${daysAgoLabel(lastBySplit[s])}`
+                : count === 0 ? 'Nog geen oefeningen' : 'Nog niet getraind';
+            const cls = [s === recommended ? 'recommended' : '', sessionActive && s === state.currentCategory ? 'in-progress' : ''].join(' ');
+            return `
+                <button class="split-btn ${cls}" onclick="app.selectSplitIndex(${i})">
+                    <span class="split-badge">Aanbevolen</span>
+                    <div class="split-text">
+                        <h2>${escapeHtml(s)}</h2>
+                        <span class="split-meta">${meta}</span>
+                    </div>
+                    <svg class="split-icon" viewBox="0 0 32 32">${DAY_ICONS[DAY_GROUP[s]] || DAY_ICONS.full}</svg>
+                </button>`;
+        }).join('');
 
         this.renderWeekGoal();
 
@@ -1387,7 +1527,7 @@ const app = {
         const tips = [];
         const period = fullWindow ? 'de laatste 4 weken' : 'sinds je begon';
         const pw = k => stats[k].perWeek;
-        const suggest = k => `Probeer ${MUSCLE_SUGGESTIONS[k].ex} op ${MUSCLE_SUGGESTIONS[k].split}-dag.`;
+        const suggest = k => `Probeer ${MUSCLE_SUGGESTIONS[k].ex} op ${this.dayForMuscle(k)}-dag.`;
 
         // 1. Helemaal niet getraind
         Object.keys(MUSCLES).filter(k => stats[k].sets === 0).slice(0, 2).forEach(k => {
@@ -1457,7 +1597,7 @@ const app = {
                         </summary>
                         <div class="muscle-detail">
                             <p>${s.last ? `Laatst getraind ${daysAgoLabel(s.last)}` : 'Nog nooit getraind'}</p>
-                            ${exList ? `<ul class="muscle-ex-list">${exList}</ul>` : `<p>${MUSCLE_SUGGESTIONS[k].ex} op ${MUSCLE_SUGGESTIONS[k].split}-dag traint deze spiergroep.</p>`}
+                            ${exList ? `<ul class="muscle-ex-list">${exList}</ul>` : `<p>${MUSCLE_SUGGESTIONS[k].ex} op ${this.dayForMuscle(k)}-dag traint deze spiergroep.</p>`}
                         </div>
                     </details>`;
             }).join('');
@@ -1601,6 +1741,20 @@ const app = {
         }
     },
 
+    selectSplitIndex(i) {
+        const day = currentDays()[i];
+        if (day) this.selectSplit(day);
+    },
+
+    async changeScheme(key) {
+        if (!SCHEMES[key] || key === state.scheme) return;
+        state.scheme = key;
+        localStorage.setItem(SCHEME_KEY, key);
+        this.vibrate(15);
+        this.renderLaunch();
+        try { await DB.saveScheme(key); } catch { /* lokaal staat hij al goed */ }
+    },
+
     resumeWorkout() {
         if (state.currentCategory) this.selectSplit(state.currentCategory);
     },
@@ -1653,7 +1807,7 @@ const app = {
             card.innerHTML = `
                 <div class="progress-ex-info">
                     <span class="progress-ex-name">${escapeHtml(exercise.name)}</span>
-                    <span class="progress-ex-meta">${escapeHtml(exercise.category)} · ${totalSets} sets · laatst ${lastDate}</span>
+                    <span class="progress-ex-meta">${escapeHtml(exDays(exercise).join(' · '))} · ${totalSets} sets · laatst ${lastDate}</span>
                 </div>
                 <div class="progress-ex-stats">
                     <span class="progress-ex-pr">PR: ${formatKg(pr)} kg</span>
@@ -1777,8 +1931,15 @@ const app = {
     fillExerciseSuggestions() {
         const existing = new Set(this.exercisesForCategory(state.currentCategory).map(ex => ex.name.toLowerCase()));
         const list = document.getElementById('ex-suggestions');
-        const options = (EXERCISE_SUGGESTIONS[state.currentCategory] || [])
-            .filter(name => !existing.has(name.toLowerCase()));
+        // Eerst je eigen oefeningen van andere dagen, dan algemene suggesties
+        const own = (DB.exercises || []).map(ex => ex.name);
+        const seen = new Set(existing);
+        const options = [...own, ...suggestionsForDay(state.currentCategory)].filter(name => {
+            const k = name.toLowerCase();
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+        });
         list.innerHTML = options.map(name => `<option value="${escapeHtml(name)}"></option>`).join('');
     },
 
@@ -1787,15 +1948,32 @@ const app = {
         const name = input.value.trim();
         if (!name) return;
 
-        const duplicate = this.exercisesForCategory(state.currentCategory)
-            .some(ex => ex.name.toLowerCase() === name.toLowerCase());
-        if (duplicate) {
-            this.showToast('Deze oefening bestaat al');
+        const day = state.currentCategory;
+        const existingEx = this.findExerciseByName(name);
+        if (existingEx) {
+            const days = exDays(existingEx);
+            if (days.includes(day)) {
+                this.showToast('Deze oefening staat al in deze training');
+                return;
+            }
+            // Zelfde oefening op een extra dag: één geschiedenis, geen dubbele
+            if (!window.confirm(`${existingEx.name} staat al bij ${days.join(', ')}. Ook aan ${day} toevoegen?`)) return;
+            try {
+                const newDays = [...days, day];
+                await DB.updateExerciseDays(existingEx.id, newDays);
+                DB.exercises = DB.exercises.map(ex => ex.id === existingEx.id ? { ...ex, days: newDays, category: newDays[0] } : ex);
+                this.hideAddExerciseForm();
+                this.renderExerciseList();
+                this.showToast(`${existingEx.name} toegevoegd aan ${day} ✅`);
+            } catch (e) {
+                this.showToast('Fout bij opslaan oefening.');
+            }
             return;
         }
 
         const newExData = {
-            category: state.currentCategory,
+            category: day,
+            days: [day],
             name: name
         };
 
@@ -1975,6 +2153,20 @@ const app = {
         const index = DB.exercises.findIndex(ex => ex.id === id);
         if (index > -1) {
             const ex = DB.exercises[index];
+            // Staat hij ook op een andere dag? Dan alleen van deze dag halen, geschiedenis blijft
+            const days = exDays(ex);
+            if (days.length > 1 && days.includes(state.currentCategory)) {
+                const newDays = days.filter(d => d !== state.currentCategory);
+                try {
+                    await DB.updateExerciseDays(id, newDays);
+                    DB.exercises = DB.exercises.map(e => e.id === id ? { ...e, days: newDays, category: newDays[0] } : e);
+                    this.showToast(`${ex.name} van ${state.currentCategory} gehaald`);
+                } catch (e) {
+                    this.showToast('Fout bij verwijderen.');
+                }
+                this.renderExerciseList();
+                return;
+            }
             const logCount = (state.logsCache[id] || []).length;
             const question = logCount > 0
                 ? `"${ex.name}" verwijderen? Ook de ${logCount} gelogde sets worden verwijderd.`
@@ -2026,7 +2218,7 @@ const app = {
 
     getNextExercise() {
         if (!state.currentExercise) return null;
-        const list = this.exercisesForCategory(state.currentExercise.category);
+        const list = this.exercisesForCategory(state.currentCategory);
         const idx = list.findIndex(ex => ex.id === state.currentExercise.id);
         // Eerst de volgende oefening die nog niet gedaan is, anders gewoon de volgende
         const after = list.slice(idx + 1).concat(list.slice(0, idx));

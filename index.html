@@ -148,59 +148,15 @@
                     <div id="week-days" class="week-days"></div>
                 </section>
 
-                <h2 class="section-heading">Kies je <span class="brush">training</span></h2>
-
-                <div class="split-container">
-                    <button class="split-btn" id="split-btn-Push" onclick="app.selectSplit('Push')">
-                        <span class="split-badge">Aanbevolen</span>
-                        <div class="split-text">
-                            <h2>Push</h2>
-                            <span class="split-meta" id="split-meta-Push"></span>
-                        </div>
-                        <svg class="split-icon" viewBox="0 0 32 32">
-                            <path d="M13 5v3c0 .5-.5 1-1 1H8c-2.5 0-4 1.5-4.5 3.5-.2 1 .3 2.5 1 3.5.5.8 1.5 1.5 2.5 1.5.5 0 1 .5 1 1v6c0 1.5 1 2.5 2.5 2.5h11c1.5 0 2.5-1 2.5-2.5v-6c0-.5.5-1 1-1 1 0 2-.7 2.5-1.5.7-1 1.2-2.5 1-3.5C28 10.5 26.5 9 24 9h-4c-.5 0-1-.5-1-1V5" />
-                            <path d="M10.5 15.5c2 1 3.5 1 5.5 1s3.5 0 5.5-1" />
-                            <path d="M16 11v5" />
-                            <path d="M16 16v9" />
-                            <path d="M13 18h6" />
-                            <path d="M13 21h6" />
-                            <path d="M13 24h6" />
-                        </svg>
-                    </button>
-                    <button class="split-btn" id="split-btn-Pull" onclick="app.selectSplit('Pull')">
-                        <span class="split-badge">Aanbevolen</span>
-                        <div class="split-text">
-                            <h2>Pull</h2>
-                            <span class="split-meta" id="split-meta-Pull"></span>
-                        </div>
-                        <svg class="split-icon" viewBox="0 0 32 32">
-                            <path d="M14 6v3" />
-                            <path d="M18 6v3" />
-                            <path d="M14 9H8c-2 0-3 1.5-4 3 0 0-2 4 1 6 1 .7 2 1 3 1 .5 0 1 .5 1 1v6c0 1.5 1 2.5 2.5 2.5h9c1.5 0 2.5-1 2.5-2.5v-6c0-.5.5-1 1-1 1 0 2-.3 3-1 3-2 1-6 1-6-1-1.5-2-3-4-3h-6" />
-                            <path d="M8 13c3 4 5 10 5.5 14" />
-                            <path d="M24 13c-3 4-5 10-5.5 14" />
-                            <path d="M16 9v18" />
-                            <path d="M16 14L10 9" />
-                            <path d="M16 14l6-5" />
-                        </svg>
-                    </button>
-                    <button class="split-btn" id="split-btn-Legs" onclick="app.selectSplit('Legs')">
-                        <span class="split-badge">Aanbevolen</span>
-                        <div class="split-text">
-                            <h2>Legs</h2>
-                            <span class="split-meta" id="split-meta-Legs"></span>
-                        </div>
-                        <svg class="split-icon" viewBox="0 0 32 32">
-                            <path d="M16 4c3 3 5 8 3 12" />
-                            <path d="M11 4c-1 4-1 9 2 12" />
-                            <path d="M13 5c1 3 2 7 1 10" />
-                            <circle cx="15.5" cy="18" r="2.5" />
-                            <path d="M18 18c3 3 3 6 1 9" />
-                            <path d="M13 18c-1 4-1 8 0 10" />
-                            <path d="M13 28h7c2 0 3 1 3 2H11c0-1 1-2 2-2z" />
-                        </svg>
-                    </button>
+                <div class="scheme-row">
+                    <h2 class="section-heading">Kies je <span class="brush">training</span></h2>
+                    <label class="scheme-select">
+                        <span class="scheme-label">Schema</span>
+                        <select id="scheme-select" onchange="app.changeScheme(this.value)" aria-label="Trainingsschema"></select>
+                    </label>
                 </div>
+
+                <div id="split-container" class="split-container"></div>
             </div>
         </main>
 

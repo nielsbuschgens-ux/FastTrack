@@ -650,6 +650,46 @@ body {
     white-space: nowrap;
 }
 
+.scheme-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.scheme-select {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.scheme-label {
+    font-family: var(--font-cond);
+    font-weight: 700;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+}
+
+.scheme-select select {
+    min-height: 44px;
+    padding: 0 36px 0 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23FF1A55' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 12px center;
+    color: var(--text);
+    font-family: var(--font-cond);
+    font-weight: 700;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+
 .split-container {
     display: flex;
     flex-direction: column;

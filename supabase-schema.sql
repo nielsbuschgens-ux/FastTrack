@@ -23,6 +23,9 @@ create table if not exists public.fitness_logs (
 -- Handmatige spiergroepen per oefening ({"primary": "...", "secondary": [...]}), null = automatisch
 alter table public.fitness_exercises add column if not exists muscles jsonb;
 
+-- Dagen waarop een oefening staat (één oefening kan op meerdere dagen), null = alleen category
+alter table public.fitness_exercises add column if not exists days text[];
+
 create index if not exists fitness_exercises_user_id_idx on public.fitness_exercises (user_id);
 create index if not exists fitness_logs_user_id_idx on public.fitness_logs (user_id);
 create index if not exists fitness_logs_exercise_id_idx on public.fitness_logs (exercise_id);
