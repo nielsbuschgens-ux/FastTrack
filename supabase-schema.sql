@@ -27,6 +27,11 @@ create index if not exists fitness_logs_exercise_id_idx on public.fitness_logs (
 alter table public.fitness_exercises enable row level security;
 alter table public.fitness_logs enable row level security;
 
+-- Data API access (nodig als "Automatically expose new tables" uit staat)
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.fitness_exercises to authenticated;
+grant select, insert, update, delete on public.fitness_logs to authenticated;
+
 -- Exercises policies
 drop policy if exists "Users can read own exercises" on public.fitness_exercises;
 create policy "Users can read own exercises"

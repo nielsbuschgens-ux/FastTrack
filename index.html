@@ -1,12 +1,15 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="nl">
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#000000">
     <title>FastTrack Fitness</title>
-    <!-- Modern web font -->
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Fonts: Anton (display), Barlow Condensed (labels/knoppen), Inter (body) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
     <!-- Ionicons for SVG icons -->
     <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
@@ -19,32 +22,28 @@
     <div id="app">
 
         <!-- 0) Login Screen -->
-        <main id="screen-login" class="screen active" style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh;">
-            <header class="app-header" style="text-align: center; margin-bottom: 2rem;">
-                <h1>FASTTRACK.</h1>
-                <p id="auth-subtitle" style="font-weight: 500; font-size: 1.1rem; color: #00ffa3;">FastTrack your Progress</p>
+        <main id="screen-login" class="screen active auth-screen">
+            <header class="auth-header">
+                <h1 class="brand">FAST<span>TRACK</span></h1>
+                <p id="auth-subtitle" class="auth-subtitle">FastTrack your Progress</p>
             </header>
-            
-            <div class="glass-card" style="padding: 24px; width: 80%; max-width: 300px; display: flex; flex-direction: column; gap: 16px;">
-                <input type="text" id="name-input" placeholder="Volledige naam" 
-                    style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; font-family: inherit; font-size: 16px; outline: none; box-sizing: border-box; display: none;">
-                <input type="email" id="email-input" placeholder="E-mailadres" 
-                    style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; font-family: inherit; font-size: 16px; outline: none; box-sizing: border-box;">
-                <input type="password" id="password-input" placeholder="Wachtwoord" 
-                    style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; font-family: inherit; font-size: 16px; outline: none; box-sizing: border-box;">
-                
-                <div id="auth-error-msg" style="color: #ff4d4f; font-size: 0.85rem; font-weight: 500; display: none; text-align: center;"></div>
 
-                <button onclick="app.handleAuth()" id="login-btn"
-                    style="background: #00ffa3; color: black; border: none; border-radius: 8px; padding: 12px; font-weight: bold; font-size: 16px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 8px;">
-                    <span id="auth-action-text">Login</span> <ion-icon name="arrow-forward-outline"></ion-icon>
+            <div class="auth-card">
+                <input type="text" id="name-input" class="text-input" placeholder="Volledige naam" autocomplete="name" style="display: none;">
+                <input type="email" id="email-input" class="text-input" placeholder="E-mailadres" autocomplete="email" inputmode="email">
+                <input type="password" id="password-input" class="text-input" placeholder="Wachtwoord" autocomplete="current-password">
+
+                <div id="auth-error-msg" class="form-msg" style="display: none;"></div>
+
+                <button onclick="app.handleAuth()" id="login-btn" class="btn btn-primary">
+                    <span id="auth-action-text">Login</span> <span class="btn-arrow">→</span>
                 </button>
-                
-                <div style="text-align: center; margin-top: 8px; display: flex; flex-direction: column; gap: 10px;">
-                    <button onclick="app.showForgotPassword()" id="forgot-password-btn" style="background: none; border: none; color: var(--text-muted); font-family: inherit; font-size: 0.9rem; cursor: pointer; text-decoration: underline;">
+
+                <div class="auth-links">
+                    <button onclick="app.showForgotPassword()" id="forgot-password-btn" class="link-btn">
                         Wachtwoord vergeten?
                     </button>
-                    <button onclick="app.toggleAuthMode()" id="auth-toggle-btn" style="background: none; border: none; color: var(--text-muted); font-family: inherit; font-size: 0.9rem; cursor: pointer; text-decoration: underline;">
+                    <button onclick="app.toggleAuthMode()" id="auth-toggle-btn" class="link-btn">
                         Nog geen account? Registreer hier
                     </button>
                 </div>
@@ -52,167 +51,175 @@
         </main>
 
         <!-- 0b) Forgot Password Screen -->
-        <main id="screen-forgot" class="screen" style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh;">
-            <header class="app-header" style="text-align: center; margin-bottom: 2rem;">
-                <h1>FASTTRACK.</h1>
-                <p style="font-weight: 500; font-size: 1.1rem; color: #00ffa3;">Wachtwoord vergeten</p>
+        <main id="screen-forgot" class="screen auth-screen">
+            <header class="auth-header">
+                <h1 class="brand">FAST<span>TRACK</span></h1>
+                <p class="auth-subtitle">Wachtwoord vergeten</p>
             </header>
 
-            <div class="glass-card" style="padding: 24px; width: 80%; max-width: 300px; display: flex; flex-direction: column; gap: 16px;">
-                <p style="font-size: 0.9rem; color: var(--text-muted); text-align: center; line-height: 1.4;">
+            <div class="auth-card">
+                <p class="auth-text">
                     Vul je e-mailadres in. Je ontvangt een link om een nieuw wachtwoord in te stellen.
                 </p>
-                <input type="email" id="forgot-email-input" placeholder="E-mailadres"
-                    style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; font-family: inherit; font-size: 16px; outline: none; box-sizing: border-box;">
+                <input type="email" id="forgot-email-input" class="text-input" placeholder="E-mailadres" autocomplete="email" inputmode="email">
 
-                <div id="forgot-error-msg" style="color: #ff4d4f; font-size: 0.85rem; font-weight: 500; display: none; text-align: center;"></div>
+                <div id="forgot-error-msg" class="form-msg" style="display: none;"></div>
 
-                <button onclick="app.sendPasswordReset()" id="forgot-btn"
-                    style="background: #00ffa3; color: black; border: none; border-radius: 8px; padding: 12px; font-weight: bold; font-size: 16px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 8px;">
-                    <span id="forgot-action-text">Stuur reset-link</span> <ion-icon name="mail-outline"></ion-icon>
+                <button onclick="app.sendPasswordReset()" id="forgot-btn" class="btn btn-primary">
+                    <span id="forgot-action-text">Stuur reset-link</span> <span class="btn-arrow">→</span>
                 </button>
 
-                <button onclick="app.navTo('login')" style="background: none; border: none; color: var(--text-muted); font-family: inherit; font-size: 0.9rem; cursor: pointer; text-decoration: underline; margin-top: 4px;">
+                <button onclick="app.navTo('login')" class="link-btn">
                     Terug naar login
                 </button>
             </div>
         </main>
 
         <!-- 0c) Reset Password Screen (na e-mail link) -->
-        <main id="screen-reset" class="screen" style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh;">
-            <header class="app-header" style="text-align: center; margin-bottom: 2rem;">
-                <h1>FASTTRACK.</h1>
-                <p style="font-weight: 500; font-size: 1.1rem; color: #00ffa3;">Nieuw wachtwoord</p>
+        <main id="screen-reset" class="screen auth-screen">
+            <header class="auth-header">
+                <h1 class="brand">FAST<span>TRACK</span></h1>
+                <p class="auth-subtitle">Nieuw wachtwoord</p>
             </header>
 
-            <div class="glass-card" style="padding: 24px; width: 80%; max-width: 300px; display: flex; flex-direction: column; gap: 16px;">
-                <p style="font-size: 0.9rem; color: var(--text-muted); text-align: center; line-height: 1.4;">
+            <div class="auth-card">
+                <p class="auth-text">
                     Kies een nieuw wachtwoord voor je account.
                 </p>
-                <input type="password" id="reset-password-input" placeholder="Nieuw wachtwoord"
-                    style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; font-family: inherit; font-size: 16px; outline: none; box-sizing: border-box;">
-                <input type="password" id="reset-password-confirm" placeholder="Bevestig wachtwoord"
-                    style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; font-family: inherit; font-size: 16px; outline: none; box-sizing: border-box;">
+                <input type="password" id="reset-password-input" class="text-input" placeholder="Nieuw wachtwoord" autocomplete="new-password">
+                <input type="password" id="reset-password-confirm" class="text-input" placeholder="Bevestig wachtwoord" autocomplete="new-password">
 
-                <div id="reset-error-msg" style="color: #ff4d4f; font-size: 0.85rem; font-weight: 500; display: none; text-align: center;"></div>
+                <div id="reset-error-msg" class="form-msg" style="display: none;"></div>
 
-                <button onclick="app.submitNewPassword()" id="reset-btn"
-                    style="background: #00ffa3; color: black; border: none; border-radius: 8px; padding: 12px; font-weight: bold; font-size: 16px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 8px;">
-                    <span id="reset-action-text">Wachtwoord opslaan</span> <ion-icon name="checkmark-outline"></ion-icon>
+                <button onclick="app.submitNewPassword()" id="reset-btn" class="btn btn-primary">
+                    <span id="reset-action-text">Wachtwoord opslaan</span> <span class="btn-arrow">→</span>
                 </button>
             </div>
         </main>
 
         <!-- 1) Launch Screen -->
         <main id="screen-launch" class="screen">
-            <header class="top-nav" style="justify-content: space-between; padding: 16px 24px;">
-                <div class="app-header" style="padding: 0; text-align: left;">
-                    <h1 style="margin-left: -2px;">FASTTRACK.</h1>
-                    <div style="display: flex; align-items: center; gap: 8px;">
+            <header class="launch-header">
+                <div>
+                    <h1 class="brand brand-sm">FAST<span>TRACK</span></h1>
+                    <div class="welcome-row">
                         <span class="sync-status" id="sync-indicator"></span>
-                        <p style="margin: 0;">Welkom, <span id="display-username">--</span></p>
+                        <p>Welkom, <span id="display-username">--</span></p>
                     </div>
                 </div>
-                <div style="display: flex; gap: 8px; margin-right: -8px;">
-                    <button class="icon-btn" id="theme-toggle-btn" onclick="app.toggleTheme()" title="Wissel Thema" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255,255,255,0.1);">
+                <div class="header-actions">
+                    <button class="icon-btn icon-btn-boxed" id="theme-toggle-btn" onclick="app.toggleTheme()" title="Wissel thema" aria-label="Wissel thema">
                         <ion-icon name="sunny-outline" id="theme-icon"></ion-icon>
                     </button>
-                    <button class="icon-btn" onclick="app.logout()" title="Uitloggen" style="background: rgba(255,0,0,0.1); border: 1px solid rgba(255,0,0,0.2);">
-                        <ion-icon name="log-out-outline" style="color: #ff4d4f;"></ion-icon>
+                    <button class="icon-btn icon-btn-boxed" onclick="app.logout()" title="Uitloggen" aria-label="Uitloggen">
+                        <ion-icon name="log-out-outline"></ion-icon>
                     </button>
                 </div>
             </header>
 
-            <div class="split-container">
-                <button class="split-btn glass-card" onclick="app.selectSplit('Push')">
-                    <h2>Push</h2>
-                    <svg viewBox="0 0 32 32" style="width: 2.5rem; height: 2.5rem; stroke: var(--primary); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;">
-                        <!-- Neck -->
-                        <path d="M13 5v3c0 .5-.5 1-1 1H8c-2.5 0-4 1.5-4.5 3.5-.2 1 .3 2.5 1 3.5.5.8 1.5 1.5 2.5 1.5.5 0 1 .5 1 1v6c0 1.5 1 2.5 2.5 2.5h11c1.5 0 2.5-1 2.5-2.5v-6c0-.5.5-1 1-1 1 0 2-.7 2.5-1.5.7-1 1.2-2.5 1-3.5C28 10.5 26.5 9 24 9h-4c-.5 0-1-.5-1-1V5" />
-                        <!-- Pecs -->
-                        <path d="M10.5 15.5c2 1 3.5 1 5.5 1s3.5 0 5.5-1" />
-                        <path d="M16 11v5" />
-                        <!-- Abs Grid -->
-                        <path d="M16 16v9" />
-                        <path d="M13 18h6" />
-                        <path d="M13 21h6" />
-                        <path d="M13 24h6" />
-                    </svg>
+            <div class="launch-body">
+                <!-- Lopende workout hervatten -->
+                <button id="resume-banner" class="resume-banner" onclick="app.resumeWorkout()" hidden>
+                    <div class="resume-info">
+                        <span class="resume-label">Workout bezig</span>
+                        <span id="resume-text" class="resume-text"></span>
+                    </div>
+                    <span class="resume-cta">Verder →</span>
                 </button>
-                <button class="split-btn glass-card" onclick="app.selectSplit('Pull')">
-                    <h2>Pull</h2>
-                    <svg viewBox="0 0 32 32" style="width: 2.5rem; height: 2.5rem; stroke: var(--primary); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;">
-                        <!-- Neck & Traps -->
-                        <path d="M14 6v3" />
-                        <path d="M18 6v3" />
-                        <!-- Outer Torso / V-Taper -> includes shoulders -->
-                        <path d="M14 9H8c-2 0-3 1.5-4 3 0 0-2 4 1 6 1 .7 2 1 3 1 .5 0 1 .5 1 1v6c0 1.5 1 2.5 2.5 2.5h9c1.5 0 2.5-1 2.5-2.5v-6c0-.5.5-1 1-1 1 0 2-.3 3-1 3-2 1-6 1-6-1-1.5-2-3-4-3h-6" />
-                        <!-- Lats inner line giving depth -->
-                        <path d="M8 13c3 4 5 10 5.5 14" />
-                        <path d="M24 13c-3 4-5 10-5.5 14" />
-                        <!-- Spine -->
-                        <path d="M16 9v18" />
-                        <!-- Trap lines -->
-                        <path d="M16 14L10 9" />
-                        <path d="M16 14l6-5" />
-                    </svg>
-                </button>
-                <button class="split-btn glass-card" onclick="app.selectSplit('Legs')">
-                    <h2>Legs</h2>
-                    <svg viewBox="0 0 32 32" style="width: 2.5rem; height: 2.5rem; stroke: var(--primary); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;">
-                        <!-- Glute / Hip top -->
-                        <path d="M16 4c3 3 5 8 3 12" />
-                        <path d="M11 4c-1 4-1 9 2 12" />
-                        <!-- Quad detail -->
-                        <path d="M13 5c1 3 2 7 1 10" />
-                        <!-- Knee -->
-                        <circle cx="15.5" cy="18" r="2.5" />
-                        <!-- Calf -->
-                        <path d="M18 18c3 3 3 6 1 9" />
-                        <path d="M13 18c-1 4-1 8 0 10" />
-                        <!-- Foot -->
-                        <path d="M13 28h7c2 0 3 1 3 2H11c0-1 1-2 2-2z" />
-                    </svg>
-                </button>
+
+                <h2 class="section-heading">Kies je <span class="brush">training</span></h2>
+
+                <div class="split-container">
+                    <button class="split-btn" id="split-btn-Push" onclick="app.selectSplit('Push')">
+                        <span class="split-badge">Aanbevolen</span>
+                        <div class="split-text">
+                            <h2>Push</h2>
+                            <span class="split-meta" id="split-meta-Push"></span>
+                        </div>
+                        <svg class="split-icon" viewBox="0 0 32 32">
+                            <path d="M13 5v3c0 .5-.5 1-1 1H8c-2.5 0-4 1.5-4.5 3.5-.2 1 .3 2.5 1 3.5.5.8 1.5 1.5 2.5 1.5.5 0 1 .5 1 1v6c0 1.5 1 2.5 2.5 2.5h11c1.5 0 2.5-1 2.5-2.5v-6c0-.5.5-1 1-1 1 0 2-.7 2.5-1.5.7-1 1.2-2.5 1-3.5C28 10.5 26.5 9 24 9h-4c-.5 0-1-.5-1-1V5" />
+                            <path d="M10.5 15.5c2 1 3.5 1 5.5 1s3.5 0 5.5-1" />
+                            <path d="M16 11v5" />
+                            <path d="M16 16v9" />
+                            <path d="M13 18h6" />
+                            <path d="M13 21h6" />
+                            <path d="M13 24h6" />
+                        </svg>
+                    </button>
+                    <button class="split-btn" id="split-btn-Pull" onclick="app.selectSplit('Pull')">
+                        <span class="split-badge">Aanbevolen</span>
+                        <div class="split-text">
+                            <h2>Pull</h2>
+                            <span class="split-meta" id="split-meta-Pull"></span>
+                        </div>
+                        <svg class="split-icon" viewBox="0 0 32 32">
+                            <path d="M14 6v3" />
+                            <path d="M18 6v3" />
+                            <path d="M14 9H8c-2 0-3 1.5-4 3 0 0-2 4 1 6 1 .7 2 1 3 1 .5 0 1 .5 1 1v6c0 1.5 1 2.5 2.5 2.5h9c1.5 0 2.5-1 2.5-2.5v-6c0-.5.5-1 1-1 1 0 2-.3 3-1 3-2 1-6 1-6-1-1.5-2-3-4-3h-6" />
+                            <path d="M8 13c3 4 5 10 5.5 14" />
+                            <path d="M24 13c-3 4-5 10-5.5 14" />
+                            <path d="M16 9v18" />
+                            <path d="M16 14L10 9" />
+                            <path d="M16 14l6-5" />
+                        </svg>
+                    </button>
+                    <button class="split-btn" id="split-btn-Legs" onclick="app.selectSplit('Legs')">
+                        <span class="split-badge">Aanbevolen</span>
+                        <div class="split-text">
+                            <h2>Legs</h2>
+                            <span class="split-meta" id="split-meta-Legs"></span>
+                        </div>
+                        <svg class="split-icon" viewBox="0 0 32 32">
+                            <path d="M16 4c3 3 5 8 3 12" />
+                            <path d="M11 4c-1 4-1 9 2 12" />
+                            <path d="M13 5c1 3 2 7 1 10" />
+                            <circle cx="15.5" cy="18" r="2.5" />
+                            <path d="M18 18c3 3 3 6 1 9" />
+                            <path d="M13 18c-1 4-1 8 0 10" />
+                            <path d="M13 28h7c2 0 3 1 3 2H11c0-1 1-2 2-2z" />
+                        </svg>
+                    </button>
+                </div>
             </div>
         </main>
 
         <!-- 2) Workout Screen -->
         <main id="screen-workout" class="screen">
             <header class="top-nav">
-                <button class="icon-btn" onclick="app.navTo('launch')">
+                <button class="icon-btn" onclick="app.navTo('launch')" aria-label="Terug">
                     <ion-icon name="chevron-back-outline"></ion-icon>
                 </button>
-                <h2 id="workout-title">Push Workout</h2>
-                <div style="display: flex; gap: 4px;">
-                    <button class="icon-btn" onclick="app.manualSyncExercises()" style="font-size: 1.4rem;">
-                        <ion-icon name="sync-outline"></ion-icon>
-                    </button>
-                    <button class="icon-btn" onclick="app.showAddExerciseForm()">
-                        <ion-icon name="add-outline"></ion-icon>
-                    </button>
-                </div>
+                <h2 id="workout-title" class="nav-title brush">Push Workout</h2>
+                <button class="icon-btn" onclick="app.manualSyncExercises(event)" aria-label="Verversen">
+                    <ion-icon name="sync-outline"></ion-icon>
+                </button>
             </header>
 
-            <div id="add-ex-container" style="display: none; padding: 0 16px 16px 16px;">
-                <div class="glass-card" style="display: flex; gap: 8px; padding: 12px;">
-                    <input type="text" id="new-ex-input" placeholder="Nieuwe oefening..."
-                        style="flex: 1; background: transparent; border: none; color: white; outline: none; font-family: inherit; font-size: 16px;">
-                    <button onclick="app.saveNewExercise()"
-                        style="background: #00ffa3; color: black; border: none; border-radius: 8px; padding: 8px 16px; font-weight: bold; cursor: pointer;">+
-                        Add</button>
+            <div class="list-container">
+                <div id="exercise-list" class="exercise-list">
+                    <!-- Exercises injected via JS -->
                 </div>
+
+                <div id="add-ex-container" class="add-ex-card" style="display: none;">
+                    <input type="text" id="new-ex-input" class="text-input" placeholder="Naam oefening..." list="ex-suggestions" autocomplete="off" enterkeyhint="done">
+                    <button class="btn btn-primary btn-compact" onclick="app.saveNewExercise()">Toevoegen</button>
+                    <button class="icon-btn" onclick="app.hideAddExerciseForm()" aria-label="Annuleren">
+                        <ion-icon name="close-outline"></ion-icon>
+                    </button>
+                </div>
+                <datalist id="ex-suggestions"></datalist>
+
+                <button id="add-ex-btn" class="add-ex-btn" onclick="app.showAddExerciseForm()">
+                    <ion-icon name="add-outline"></ion-icon> Oefening toevoegen
+                </button>
+                <p class="list-hint">Veeg een oefening naar links om te verwijderen</p>
             </div>
 
-            <div class="list-container" id="exercise-list">
-                <!-- Exercises injected via JS -->
-            </div>
-
-            <!-- Workout Afsluiten -->
-            <div class="action-dock" style="padding-top: 0;">
-                <button class="finish-workout-btn" onclick="app.finishWorkout()">
-                    <ion-icon name="flag-outline"></ion-icon>
-                    Workout Afsluiten
+            <!-- Workout Afsluiten — altijd zichtbaar onderaan -->
+            <div class="action-dock">
+                <div id="workout-session-summary" class="session-volume-badge" hidden></div>
+                <button class="btn btn-secondary btn-block" onclick="app.finishWorkout()">
+                    Workout afsluiten <span class="btn-arrow">→</span>
                 </button>
             </div>
         </main>
@@ -220,92 +227,95 @@
         <!-- 3) Exercise Log Screen -->
         <main id="screen-log" class="screen">
             <header class="top-nav">
-                <button class="icon-btn" onclick="app.navTo('workout')">
+                <button class="icon-btn" onclick="app.navTo('workout')" aria-label="Terug">
                     <ion-icon name="chevron-back-outline"></ion-icon>
                 </button>
-                <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
-                    <h2 id="exercise-title">Bench Press</h2>
+                <div class="nav-title-stack">
+                    <h2 id="exercise-title" class="nav-title">Bench Press</h2>
                     <span id="exercise-volume-badge" class="volume-badge">0 sets · 0 kg</span>
                 </div>
-                <button class="icon-btn" onclick="app.showStats()">
+                <button class="icon-btn" onclick="app.showStats()" aria-label="Progressie">
                     <ion-icon name="stats-chart-outline"></ion-icon>
                 </button>
             </header>
 
             <div class="log-content">
-                <!-- Use Last Bar -->
-                <div class="use-last-bar" id="use-last-bar" style="display: none;">
-                    <button class="last-btn" onclick="app.useLastWeight()">
-                        Last: <span id="last-weight-val">--</span> kg
-                    </button>
-                    <button class="last-btn" onclick="app.useLastReps()">
-                        Last: <span id="last-reps-val">--</span> reps
-                    </button>
+                <div class="set-header">
+                    <span id="set-number" class="set-number brush">Set 1</span>
+                    <span id="set-hint" class="set-hint"></span>
                 </div>
 
-                <!-- Modifiers -->
+                <!-- Modifiers: tik op het getal om te typen -->
                 <div class="modifier-group">
-                    <h3 class="mod-label">Weight (kg)</h3>
+                    <label class="mod-label" for="current-weight">Gewicht (kg)</label>
                     <div class="stepper weight-stepper">
-                        <button class="step-btn step-btn-coarse" onclick="app.updateWeight(-5)" title="-5 kg">
-                            −−
-                        </button>
-                        <button class="step-btn" onclick="app.updateWeight(-1)" title="-1 kg">
+                        <button class="step-btn step-btn-coarse" onclick="app.updateWeight(-5)" aria-label="-5 kg">−5</button>
+                        <button class="step-btn" onclick="app.updateWeight(-1)" aria-label="-1 kg">
                             <ion-icon name="remove-outline"></ion-icon>
                         </button>
-                        <div class="step-val" id="current-weight">0</div>
-                        <button class="step-btn" onclick="app.updateWeight(1)" title="+1 kg">
+                        <input id="current-weight" class="step-val" type="text" inputmode="decimal" enterkeyhint="done" value="0"
+                            onfocus="this.select()" oninput="app.onWeightInput(this)" onblur="app.updateCounters()">
+                        <button class="step-btn" onclick="app.updateWeight(1)" aria-label="+1 kg">
                             <ion-icon name="add-outline"></ion-icon>
                         </button>
-                        <button class="step-btn step-btn-coarse" onclick="app.updateWeight(5)" title="+5 kg">
-                            ++
-                        </button>
+                        <button class="step-btn step-btn-coarse" onclick="app.updateWeight(5)" aria-label="+5 kg">+5</button>
                     </div>
                 </div>
 
                 <div class="modifier-group">
-                    <h3 class="mod-label">Reps</h3>
+                    <label class="mod-label" for="current-reps">Reps</label>
                     <div class="stepper">
-                        <button class="step-btn" onclick="app.updateReps(-1)">
+                        <button class="step-btn" onclick="app.updateReps(-1)" aria-label="-1 rep">
                             <ion-icon name="remove-outline"></ion-icon>
                         </button>
-                        <div class="step-val" id="current-reps">0</div>
-                        <button class="step-btn" onclick="app.updateReps(1)">
+                        <input id="current-reps" class="step-val" type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" value="0"
+                            onfocus="this.select()" oninput="app.onRepsInput(this)" onblur="app.updateCounters()">
+                        <button class="step-btn" onclick="app.updateReps(1)" aria-label="+1 rep">
                             <ion-icon name="add-outline"></ion-icon>
                         </button>
                     </div>
                 </div>
+
+                <div id="one-rm-display" class="one-rm-display"></div>
+
+                <section id="today-section" class="sets-section" hidden>
+                    <h3 class="sets-title">Vandaag</h3>
+                    <div id="today-sets" class="set-chips"></div>
+                </section>
+
+                <section id="prev-section" class="sets-section" hidden>
+                    <h3 id="prev-title" class="sets-title">Vorige keer</h3>
+                    <div id="prev-sets" class="set-chips"></div>
+                </section>
             </div>
 
             <!-- Action Area -->
-            <div class="action-dock" style="display: flex; flex-direction: column; gap: 8px;">
-                <!-- 1RM display -->
-                <div id="one-rm-display" class="one-rm-display"></div>
-                <!-- Sessie volume -->
-                <div id="session-volume-badge" class="session-volume-badge">Sessie: 0 sets · 0 kg</div>
-                <button id="log-btn" class="log-action-btn" onclick="app.submitLog()">
-                    Log Set / Next
-                    <ion-icon name="checkmark-done-outline"></ion-icon>
+            <div class="action-dock">
+                <button id="log-btn" class="btn btn-primary btn-block btn-xl" onclick="app.submitLog()">
+                    <span id="log-btn-label">Log set 1</span>
+                    <ion-icon name="checkmark-sharp"></ion-icon>
                 </button>
-                <button id="undo-btn" class="log-action-btn" onclick="app.undoLastLog()" style="background: rgba(255, 77, 79, 0.1); color: #ff4d4f; border: 1px solid rgba(255, 77, 79, 0.2); font-size: 0.95rem;">
-                    Verwijder Laatste Set
-                    <ion-icon name="trash-outline"></ion-icon>
-                </button>
+                <div class="dock-row">
+                    <span id="session-volume-badge" class="session-volume-badge">Sessie: 0 sets · 0 kg</span>
+                    <button id="next-ex-btn" class="next-ex-btn" onclick="app.goToNextExercise()" hidden>
+                        <span id="next-ex-name"></span> <span class="btn-arrow">→</span>
+                    </button>
+                </div>
             </div>
         </main>
 
         <!-- 4) Statistics Screen -->
         <main id="screen-stats" class="screen">
             <header class="top-nav">
-                <button class="icon-btn" onclick="app.navTo('log')">
+                <button class="icon-btn" onclick="app.navTo('log')" aria-label="Terug">
                     <ion-icon name="chevron-back-outline"></ion-icon>
                 </button>
-                <h2 id="stats-title">Progressie</h2>
-                <div style="width:40px"></div>
+                <h2 id="stats-title" class="nav-title">Progressie</h2>
+                <div style="width:44px"></div>
             </header>
 
             <div class="stats-content">
-                <div class="chart-container glass-card">
+                <div class="chart-container">
                     <canvas id="progressChart"></canvas>
                 </div>
                 <div class="stats-summary" id="stats-summary">
@@ -317,56 +327,63 @@
         <!-- 5) Workout Finish Screen -->
         <main id="screen-finish" class="screen finish-screen">
             <div class="finish-content">
-                <div class="finish-emoji">🏁</div>
-                <h1 class="finish-title">Workout Klaar!</h1>
-                <p class="finish-subtitle">Goed gedaan, je hebt het gevloerd! 💪</p>
+                <p class="finish-kicker">Workout klaar</p>
+                <h1 class="finish-title">Goed <span class="brush">gedaan</span></h1>
+
+                <div class="finish-hero">
+                    <small>Totaal volume</small>
+                    <div id="finish-total-volume" class="hero-number">0 kg</div>
+                </div>
 
                 <div class="finish-stats-row">
-                    <div class="finish-stat-card glass-card">
-                        <small>TOTAAL VOLUME</small>
-                        <h2 id="finish-total-volume">0 kg</h2>
-                    </div>
-                    <div class="finish-stat-card glass-card">
-                        <small>TOTAAL SETS</small>
+                    <div class="finish-stat-card">
+                        <small>Sets</small>
                         <h2 id="finish-total-sets">0</h2>
+                    </div>
+                    <div class="finish-stat-card">
+                        <small>Duur</small>
+                        <h2 id="finish-duration">–</h2>
                     </div>
                 </div>
 
-                <div class="finish-exercise-breakdown glass-card">
+                <div class="finish-exercise-breakdown">
                     <h3 class="finish-breakdown-title">Per oefening</h3>
                     <div id="finish-exercise-list">
                         <!-- Injected by JS -->
                     </div>
                 </div>
 
-                <button class="log-action-btn" onclick="app.resetSession()" style="margin-top: 8px;">
-                    <ion-icon name="home-outline"></ion-icon>
-                    Terug naar Home
+                <button class="btn btn-primary btn-block" onclick="app.resetSession()">
+                    Terug naar home <span class="btn-arrow">→</span>
                 </button>
             </div>
         </main>
 
-        <!-- 5) Global Progress Screen -->
+        <!-- 6) Global Progress Screen -->
         <main id="screen-global-progress" class="screen">
-            <header class="app-header" style="padding-bottom: 20px;">
-                <h1>FASTTRACK.</h1>
-                <p>Jouw data</p>
+            <header class="page-header">
+                <h1 class="brand brand-sm">FAST<span>TRACK</span></h1>
+                <h2 class="section-heading">Jouw <span class="brush">progressie</span></h2>
             </header>
 
-            <div class="stats-content" style="padding-bottom: 100px;">
-                <div class="glass-card" style="padding: 16px; margin-bottom: 16px;">
-                    <select id="global-ex-select" onchange="app.renderGlobalProgress()"
-                        style="width: 100%; padding: 12px; background: rgba(0,0,0,0.3); color: white; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; font-family: inherit; font-size: 1rem; outline: none; cursor: pointer;">
-                        <!-- Options injected by JS -->
-                    </select>
-                </div>
+            <div class="progress-list-container" id="progress-exercise-list">
+                <!-- Injected by JS -->
+            </div>
 
-                <div class="chart-container glass-card" style="margin-bottom: 20px;">
-                    <canvas id="globalChart"></canvas>
+            <!-- Detail grafiek (verborgen tot selectie) -->
+            <div id="progress-chart-panel" class="progress-chart-panel" style="display:none;">
+                <div class="top-nav">
+                    <button class="icon-btn" onclick="app.closeProgressChart()" aria-label="Terug">
+                        <ion-icon name="chevron-back-outline"></ion-icon>
+                    </button>
+                    <h2 id="progress-chart-title" class="nav-title">Oefening</h2>
+                    <div style="width:44px"></div>
                 </div>
-
-                <div class="stats-summary" id="global-summary">
-                    <!-- Stats summary injected here -->
+                <div class="stats-content" style="padding-bottom: 100px;">
+                    <div class="chart-container">
+                        <canvas id="globalChart"></canvas>
+                    </div>
+                    <div class="stats-summary" id="global-summary"></div>
                 </div>
             </div>
         </main>
@@ -379,23 +396,27 @@
             </button>
             <button id="nav-progress-btn" class="nav-btn" onclick="app.showGlobalProgress(this)">
                 <ion-icon name="trending-up-outline"></ion-icon>
-                <span>Progress</span>
+                <span>Progressie</span>
             </button>
         </nav>
 
         <!-- Rest timer (zichtbaar na het loggen van een set) -->
         <div id="rest-timer" class="rest-timer" hidden>
+            <button type="button" class="rest-timer-adjust" onclick="app.adjustRestTimer(-30)" aria-label="30 seconden korter">−30</button>
+            <div class="rest-timer-main">
+                <div class="rest-timer-label">Rust</div>
+                <div class="rest-timer-time" id="rest-timer-time">3:00</div>
+            </div>
+            <button type="button" class="rest-timer-adjust" onclick="app.adjustRestTimer(30)" aria-label="30 seconden langer">+30</button>
             <button type="button" class="rest-timer-dismiss" onclick="app.dismissRestTimer()" title="Sluiten" aria-label="Timer sluiten">
                 <ion-icon name="close-outline"></ion-icon>
             </button>
-            <div class="rest-timer-label">Rust</div>
-            <div class="rest-timer-time" id="rest-timer-time">3:00</div>
         </div>
 
     </div>
 
     <!-- Toast Component -->
-    <div id="toast" class="toast">
+    <div id="toast" class="toast" role="status" aria-live="polite">
         <ion-icon name="flash"></ion-icon>
         <span id="toast-msg">Set Opgeslagen 🚀</span>
     </div>

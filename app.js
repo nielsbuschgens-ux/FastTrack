@@ -304,6 +304,46 @@ function createSupabaseDB() {
 const DB = DEMO_MODE ? createLocalDB() : createSupabaseDB();
 
 // --- 2. Global State ---
+const SESSION_KEY = 'fasttrack_session';
+const REST_KEY = 'fasttrack_rest_seconds';
+const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const MAX_WEIGHT = 500;
+const MAX_REPS = 100;
+const SPLITS = ['Push', 'Pull', 'Legs'];
+const EXERCISE_SUGGESTIONS = {
+    Push: ['Bench Press', 'Incline Bench Press', 'Incline Dumbbell Press', 'Dumbbell Bench Press', 'Shoulder Press', 'Dumbbell Shoulder Press', 'Lateral Raise', 'Chest Fly', 'Cable Crossover', 'Dips', 'Tricep Pushdown', 'Overhead Tricep Extension', 'Skull Crushers', 'Push Ups'],
+    Pull: ['Pull Ups', 'Chin Ups', 'Lat Pulldown', 'Barbell Row', 'Dumbbell Row', 'Seated Cable Row', 'T-Bar Row', 'Face Pull', 'Rear Delt Fly', 'Deadlift', 'Bicep Curl', 'Hammer Curl', 'Preacher Curl', 'Shrugs'],
+    Legs: ['Squat', 'Front Squat', 'Leg Press', 'Romanian Deadlift', 'Hamstring Curl', 'Leg Extension', 'Bulgarian Split Squat', 'Lunges', 'Hip Thrust', 'Calf Raise', 'Hack Squat', 'Goblet Squat']
+};
+
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function isSameDay(a, b) {
+    return new Date(a).toDateString() === new Date(b).toDateString();
+}
+
+function daysAgoLabel(date) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const day = new Date(date);
+    day.setHours(0, 0, 0, 0);
+    const diff = Math.round((today - day) / 86400000);
+    if (diff <= 0) return 'vandaag';
+    if (diff === 1) return 'gisteren';
+    if (diff < 7) return `${diff} dagen geleden`;
+    return day.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+}
+
+function formatKg(n) {
+    return Number(n).toLocaleString('nl-NL', { maximumFractionDigits: 2 });
+}
+
+function formatInputNumber(n) {
+    return String(Number(n)).replace('.', ',');
+}
+
 const state = {
     currentCategory: null,
     currentExercise: null,
@@ -325,7 +365,13 @@ const state = {
     sessionExercises: {},       // { exerciseId: { name, volume, sets } }
     exerciseVolume: 0,          // volume voor huidige oefening
     exerciseSets: 0,            // sets voor huidige oefening
-    allTimePRs: {}              // { exerciseId: maxWeight }
+    allTimePRs: {},             // { exerciseId: maxWeight }
+    sessionStartedAt: null,     // timestamp van eerste set
+    logsCache: {},              // { exerciseId: logs (nieuwste eerst) }
+    restDefault: parseInt(localStorage.getItem(REST_KEY), 10) || 180,
+    dirty: false,               // gebruiker heeft gewicht/reps zelf aangepast
+    saving: false,
+    toastTimeout: null
 };
 
 // --- 3. UI Logic ---
@@ -402,7 +448,7 @@ const app = {
         const forgotBtn = document.getElementById('forgot-password-btn');
 
         subtitle.innerText = 'Demo modus — vul je naam in';
-        subtitle.style.color = '#00ffa3';
+        subtitle.style.color = '';
         nameInput.style.display = 'block';
         nameInput.placeholder = 'Je naam (bijv. Alex)';
         emailInput.style.display = 'none';
@@ -538,11 +584,8 @@ const app = {
         }
         localStorage.setItem('fasttrack_theme', state.theme);
         
-        // Rerender charts if they are visible to update grid lines
-        if (state.globalChart) {
-            this.renderGlobalProgress();
-        }
-        if (state.chart) {
+        // Rerender chart alleen als het statistiekenscherm zichtbaar is
+        if (state.chart && state.currentExercise && document.getElementById('screen-stats').classList.contains('active')) {
             this.showStats();
         }
     },
@@ -749,6 +792,12 @@ const app = {
         }
 
         DB.exercises = customExercises;
+        this.restoreSession();
+
+        // Laatste prestaties ophalen voor "aanbevolen" split en voorinvullen (niet blokkerend)
+        this.loadLogsFor(DB.exercises).then(() => {
+            if (document.getElementById('screen-launch').classList.contains('active')) this.renderLaunch();
+        });
 
         // Apply theme icon properly after login
         const themeIcon = document.getElementById('theme-icon');
@@ -773,6 +822,16 @@ const app = {
         } else {
             await supabaseClient.auth.signOut();
         }
+        // Lopende sessie en cache horen bij deze gebruiker
+        this.dismissRestTimer();
+        state.sessionVolume = 0;
+        state.sessionSets = 0;
+        state.sessionExercises = {};
+        state.sessionStartedAt = null;
+        state.currentExercise = null;
+        state.logsCache = {};
+        state.allTimePRs = {};
+        this.persistSession();
         if (DEMO_MODE) {
             this.setupDemoUI();
         } else {
@@ -808,6 +867,10 @@ const app = {
             // Hide bottom nav when deep inside workout flows / auth screens
             nav.style.display = 'none';
         }
+
+        // Schermen altijd met verse data tonen
+        if (screenId === 'launch') this.renderLaunch();
+        if (screenId === 'workout' && state.currentCategory) this.renderExerciseList();
     },
 
     navToMode(screenId, btnElement) {
@@ -821,83 +884,269 @@ const app = {
         if (dot) dot.className = `sync-status ${isOnline ? 'online' : ''}`;
     },
 
-    async manualSyncExercises() {
-        const btn = event.currentTarget;
-        const icon = btn.querySelector('ion-icon');
-        icon.classList.add('syncing-anim'); // Add CSS for this or just rotate
-        
+    async manualSyncExercises(evt) {
+        const btn = evt && evt.currentTarget;
+        const icon = btn ? btn.querySelector('ion-icon') : null;
+        if (icon) icon.classList.add('syncing-anim');
+
         try {
             DB.exercises = await DB.getExercises();
+            await this.loadLogsFor(this.exercisesForCategory(state.currentCategory));
             this.renderExerciseList();
             this.showToast('Lijst Ververst! 🔄');
         } finally {
-            setTimeout(() => icon.classList.remove('syncing-anim'), 500);
+            if (icon) setTimeout(() => icon.classList.remove('syncing-anim'), 500);
         }
     },
 
     async manualSyncLogs() {
         if (!state.currentExercise) return;
-        const logs = await DB.getLogsForExercise(state.currentExercise.id);
-        state.lastLog = logs.length > 0 ? logs[0] : null;
-        
+        const exId = state.currentExercise.id;
+        const logs = await DB.getLogsForExercise(exId);
+        this.cacheLogs(exId, logs);
+
         if (document.getElementById('screen-log').classList.contains('active')) {
-            if (state.lastLog) {
-                document.getElementById('use-last-bar').style.display = 'flex';
-                document.getElementById('last-weight-val').innerText = state.lastLog.weight;
-                document.getElementById('last-reps-val').innerText = state.lastLog.reps;
-            } else {
-                document.getElementById('use-last-bar').style.display = 'none';
-            }
+            if (!state.dirty) this.prepareNextSet();
+            this.renderLogScreen();
         }
         if (document.getElementById('screen-stats').classList.contains('active')) {
-            this.showStats(); 
+            this.showStats();
         }
     },
 
-    // Bottom Nav - Global Progress 
+    // --- Data helpers ---
+    exercisesForCategory(category) {
+        return (DB.exercises || []).filter(ex => ex.category === category);
+    },
+
+    cacheLogs(exId, logs) {
+        state.logsCache[exId] = logs || [];
+        state.lastLog = state.currentExercise && state.currentExercise.id === exId
+            ? (state.logsCache[exId][0] || null)
+            : state.lastLog;
+        if (state.logsCache[exId].length > 0) {
+            state.allTimePRs[exId] = Math.max(...state.logsCache[exId].map(l => Number(l.weight)));
+        } else {
+            delete state.allTimePRs[exId];
+        }
+    },
+
+    async loadLogsFor(exercises) {
+        const results = await Promise.all(exercises.map(ex =>
+            DB.getLogsForExercise(ex.id).then(logs => [ex.id, logs]).catch(() => [ex.id, []])
+        ));
+        results.forEach(([id, logs]) => this.cacheLogs(id, logs));
+    },
+
+    sessionEntries(exId) {
+        const se = state.sessionExercises[exId];
+        return se && se.entries ? se.entries : [];
+    },
+
+    // Sets van de laatste eerdere training (zelfde dag als meest recente log buiten deze sessie)
+    getPreviousSession(exId) {
+        const logs = state.logsCache[exId] || [];
+        const sessionIds = new Set(this.sessionEntries(exId).map(e => e.id).filter(Boolean));
+        const older = logs.filter(l => !sessionIds.has(l.id));
+        if (older.length === 0) return null;
+        const ref = older[0].created_at;
+        const sets = older.filter(l => isSameDay(l.created_at, ref)).reverse();
+        return { date: ref, sets };
+    },
+
+    // Slimme suggestie: gewicht van je vorige set vandaag, reps-doel van vorige keer
+    suggestNextSet(exId) {
+        const entries = this.sessionEntries(exId);
+        const prev = this.getPreviousSession(exId);
+        const n = entries.length;
+        const prevSet = prev ? prev.sets[n] : null;
+
+        if (n > 0) {
+            const last = entries[n - 1];
+            return { weight: last.weight, reps: prevSet ? Number(prevSet.reps) : last.reps };
+        }
+        if (prev && prev.sets.length > 0) {
+            const first = prev.sets[0];
+            return { weight: Number(first.weight), reps: Number(first.reps) };
+        }
+        return { weight: 20, reps: 10 };
+    },
+
+    prepareNextSet() {
+        if (!state.currentExercise) return;
+        const next = this.suggestNextSet(state.currentExercise.id);
+        state.weight = next.weight;
+        state.reps = next.reps;
+        state.dirty = false;
+    },
+
+    // --- Session persistence (overleeft herstart van de app) ---
+    persistSession() {
+        if (state.sessionSets > 0) {
+            localStorage.setItem(SESSION_KEY, JSON.stringify({
+                category: state.currentCategory,
+                startedAt: state.sessionStartedAt,
+                sessionVolume: state.sessionVolume,
+                sessionSets: state.sessionSets,
+                sessionExercises: state.sessionExercises
+            }));
+        } else {
+            localStorage.removeItem(SESSION_KEY);
+        }
+    },
+
+    restoreSession() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(SESSION_KEY));
+            if (!saved || !saved.startedAt || Date.now() - saved.startedAt > SESSION_MAX_AGE_MS) {
+                localStorage.removeItem(SESSION_KEY);
+                return;
+            }
+            state.currentCategory = saved.category || state.currentCategory;
+            state.sessionStartedAt = saved.startedAt;
+            state.sessionVolume = saved.sessionVolume || 0;
+            state.sessionSets = saved.sessionSets || 0;
+            state.sessionExercises = saved.sessionExercises || {};
+        } catch {
+            localStorage.removeItem(SESSION_KEY);
+        }
+    },
+
+    // --- Screen 1: Launch ---
+    renderLaunch() {
+        const lastBySplit = {};
+        SPLITS.forEach(s => { lastBySplit[s] = null; });
+        (DB.exercises || []).forEach(ex => {
+            const logs = state.logsCache[ex.id];
+            if (!logs || logs.length === 0 || !(ex.category in lastBySplit)) return;
+            const t = new Date(logs[0].created_at);
+            if (!lastBySplit[ex.category] || t > lastBySplit[ex.category]) lastBySplit[ex.category] = t;
+        });
+
+        const sessionActive = state.sessionSets > 0;
+
+        // Aanbevolen: split die het langst niet getraind is
+        let recommended = null;
+        if (!sessionActive && Object.values(lastBySplit).some(Boolean)) {
+            recommended = SPLITS.reduce((best, s) => {
+                if (best === null) return s;
+                const a = lastBySplit[s] ? lastBySplit[s].getTime() : -Infinity;
+                const b = lastBySplit[best] ? lastBySplit[best].getTime() : -Infinity;
+                return a < b ? s : best;
+            }, null);
+        }
+
+        SPLITS.forEach(s => {
+            const meta = document.getElementById(`split-meta-${s}`);
+            if (meta) meta.innerText = lastBySplit[s] ? `Laatst ${daysAgoLabel(lastBySplit[s])}` : 'Nog niet getraind';
+            const btn = document.getElementById(`split-btn-${s}`);
+            if (btn) {
+                btn.classList.toggle('recommended', s === recommended);
+                btn.classList.toggle('in-progress', sessionActive && s === state.currentCategory);
+            }
+        });
+
+        const banner = document.getElementById('resume-banner');
+        if (banner) {
+            banner.hidden = !sessionActive;
+            if (sessionActive) {
+                const exCount = Object.keys(state.sessionExercises).length;
+                document.getElementById('resume-text').innerText =
+                    `${state.currentCategory || 'Workout'} · ${exCount} oef. · ${state.sessionSets} sets`;
+            }
+        }
+    },
+
+    resumeWorkout() {
+        if (state.currentCategory) this.selectSplit(state.currentCategory);
+    },
+
+    // Bottom Nav - Global Progress
     async showGlobalProgress(btnElement) {
         this.navToMode('global-progress', btnElement);
 
-        const select = document.getElementById('global-ex-select');
-        let options = '<option value="" disabled selected>Kies een oefening om te analyseren...</option>';
-        DB.exercises.forEach(ex => {
-            options += `<option value="${ex.id}">${ex.name} (${ex.category})</option>`;
-        });
-        select.innerHTML = options;
+        // Verberg chart panel, toon lijst
+        document.getElementById('progress-chart-panel').style.display = 'none';
+        document.getElementById('progress-exercise-list').style.display = 'block';
 
-        document.getElementById('global-summary').innerHTML = '';
-        if (state.globalChart) state.globalChart.destroy();
+        const container = document.getElementById('progress-exercise-list');
+        container.innerHTML = '<small style="color: var(--text-muted); padding: 24px; display:block; text-align:center;">Laden...</small>';
+
+        // Zorg dat exercises altijd vers zijn (ook na page refresh)
+        if (!DB.exercises || DB.exercises.length === 0) {
+            DB.exercises = await DB.getExercises();
+        }
+
+        // Haal alle logs parallel op en groepeer per oefening
+        await this.loadLogsFor(DB.exercises);
+        const allLogs = DB.exercises
+            .map(ex => ({ exercise: ex, logs: state.logsCache[ex.id] || [] }))
+            .filter(item => item.logs.length > 0);
+
+        if (allLogs.length === 0) {
+            container.innerHTML = `
+                <div style="padding: 48px 24px; text-align: center; color: var(--text-muted);">
+                    <div style="font-size: 3rem; margin-bottom: 16px;">📊</div>
+                    <p style="font-weight: 600;">Nog geen data</p>
+                    <p style="font-size: 0.9rem; margin-top: 8px;">Log je eerste set om progressie te zien!</p>
+                </div>`;
+            return;
+        }
+
+        // Sorteer op meest recent gelogd
+        allLogs.sort((a, b) => new Date(b.logs[0].created_at) - new Date(a.logs[0].created_at));
+
+        container.innerHTML = '';
+        allLogs.forEach(({ exercise, logs }) => {
+            const pr = Math.max(...logs.map(l => Number(l.weight)));
+            const totalSets = logs.length;
+            const lastDate = new Date(logs[0].created_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+            const oneRM = Math.max(...logs.map(l => this.calculate1RM(Number(l.weight), Number(l.reps))));
+
+            const card = document.createElement('div');
+            card.className = 'progress-ex-card glass-card';
+            card.innerHTML = `
+                <div class="progress-ex-info">
+                    <span class="progress-ex-name">${escapeHtml(exercise.name)}</span>
+                    <span class="progress-ex-meta">${escapeHtml(exercise.category)} · ${totalSets} sets · laatst ${lastDate}</span>
+                </div>
+                <div class="progress-ex-stats">
+                    <span class="progress-ex-pr">PR: ${formatKg(pr)} kg</span>
+                    <span class="progress-ex-1rm">1RM: ~${formatKg(oneRM)} kg</span>
+                </div>
+                <ion-icon name="chevron-forward" style="color: var(--text-muted); font-size: 1.2rem;"></ion-icon>
+            `;
+            card.onclick = () => this.openProgressChart(exercise, logs);
+            container.appendChild(card);
+        });
     },
 
-    async renderGlobalProgress() {
-        const select = document.getElementById('global-ex-select');
-        const exerciseId = select.value;
-        if (!exerciseId) return;
+    openProgressChart(exercise, logs) {
+        document.getElementById('progress-exercise-list').style.display = 'none';
+        const panel = document.getElementById('progress-chart-panel');
+        panel.style.display = 'flex';
+        panel.style.flexDirection = 'column';
 
-        // Reset summary while loading
-        document.getElementById('global-summary').innerHTML = '<small>Data laden...</small>';
+        document.getElementById('progress-chart-title').innerText = exercise.name;
 
-        const logs = await DB.getLogsForExercise(exerciseId);
         const chartData = [...logs].reverse();
-
         const canvas = document.getElementById('globalChart');
-        if (!canvas) return; 
         const ctx = canvas.getContext('2d');
         if (state.globalChart) state.globalChart.destroy();
 
         state.globalChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: chartData.map(d => new Date(d.created_at).toLocaleDateString()),
+                labels: chartData.map(d => new Date(d.created_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })),
                 datasets: [{
                     label: 'Gewicht (kg)',
                     data: chartData.map(d => d.weight),
-                    borderColor: '#00ffa3', // green line
-                    backgroundColor: 'rgba(0, 255, 163, 0.15)',
+                    borderColor: '#FF1A55',
+                    backgroundColor: 'rgba(255, 26, 85, 0.18)',
                     tension: 0.4,
                     fill: true,
                     pointRadius: 6,
-                    pointBackgroundColor: '#00ffa3',
+                    pointBackgroundColor: '#FF1A55',
                     pointBorderColor: '#fff',
                     pointBorderWidth: 2
                 }]
@@ -908,70 +1157,97 @@ const app = {
                 scales: {
                     y: {
                         beginAtZero: false,
-                        grid: { color: state.theme === 'light' ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)' },
+                        grid: { color: state.theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)' },
                         ticks: { color: state.theme === 'light' ? '#64748b' : '#888' }
                     },
                     x: {
                         grid: { display: false },
-                        ticks: { 
-                            color: state.theme === 'light' ? '#64748b' : '#888', 
-                            maxRotation: 45, 
-                            minRotation: 45,
-                            autoSkip: true,
-                            maxTicksLimit: 8
-                        }
+                        ticks: { color: state.theme === 'light' ? '#64748b' : '#888', maxRotation: 45, minRotation: 45, autoSkip: true, maxTicksLimit: 8 }
                     }
                 },
-                plugins: {
-                    legend: { display: false }
-                }
+                plugins: { legend: { display: false } }
             }
         });
 
-        // Summary info
-        const best = chartData.length > 0 ? Math.max(...chartData.map(d => d.weight)) : 0;
-        const totalVolume = chartData.reduce((acc, current) => acc + (current.weight * current.reps), 0);
+        const best = Math.max(...chartData.map(d => Number(d.weight)));
+        const totalVolume = chartData.reduce((acc, d) => acc + (d.weight * d.reps), 0);
+        document.getElementById('global-summary').innerHTML = `
+            <div class="summary-card glass-card" style="margin-bottom: 8px;">
+                <small>ALL-TIME RECORD</small>
+                <h3 style="color: var(--accent);">${formatKg(best)} kg</h3>
+            </div>
+            <div class="summary-card glass-card">
+                <small>TOTAAL VERPLAATST VOLUME</small>
+                <h3 style="color: var(--primary);">${formatKg(totalVolume)} kg</h3>
+            </div>
+        `;
+    },
 
-        document.getElementById('global-summary').innerHTML = '';
-        if (chartData.length > 0) {
-            document.getElementById('global-summary').innerHTML = `
-                <div class="summary-card glass-card" style="margin-bottom: 8px;">
-                    <small>ALL-TIME RECORD</small>
-                    <h3 style="color: var(--accent);">${best} kg</h3>
-                </div>
-                <div class="summary-card glass-card">
-                    <small>TOTAAL VERPLAATST VOLUME</small>
-                    <h3 style="color: var(--primary);">${totalVolume} kg</h3>
-                </div>
-            `;
-        } else {
-            document.getElementById('global-summary').innerHTML = '<small>Geen data gevonden voor deze oefening.</small>';
+    closeProgressChart() {
+        document.getElementById('progress-chart-panel').style.display = 'none';
+        document.getElementById('progress-exercise-list').style.display = 'block';
+        if (state.globalChart) {
+            state.globalChart.destroy();
+            state.globalChart = null;
         }
     },
 
+    async renderGlobalProgress() {
+        // Legacy fallback — niet meer gebruikt in nieuwe UI
+    },
+
     // Screen 1 -> Screen 2
-    selectSplit(category) {
+    async selectSplit(category) {
         state.currentCategory = category;
         document.getElementById('workout-title').innerText = `${category} Workout`;
-        document.getElementById('add-ex-container').style.display = 'none'; // reset form display
+        this.hideAddExerciseForm();
         this.renderExerciseList();
         this.navTo('workout');
+
+        // Laatste prestaties per oefening op de achtergrond ophalen
+        await this.loadLogsFor(this.exercisesForCategory(category));
+        if (state.currentCategory === category) this.renderExerciseList();
     },
 
     showAddExerciseForm() {
         const container = document.getElementById('add-ex-container');
         if (container.style.display === 'none') {
-            container.style.display = 'block';
-            document.getElementById('new-ex-input').focus();
+            this.fillExerciseSuggestions();
+            container.style.display = 'flex';
+            document.getElementById('add-ex-btn').style.display = 'none';
+            const input = document.getElementById('new-ex-input');
+            input.focus();
+            container.scrollIntoView({ behavior: 'smooth', block: 'center' });
         } else {
-            container.style.display = 'none';
+            this.hideAddExerciseForm();
         }
+    },
+
+    hideAddExerciseForm() {
+        document.getElementById('add-ex-container').style.display = 'none';
+        document.getElementById('add-ex-btn').style.display = 'flex';
+        document.getElementById('new-ex-input').value = '';
+    },
+
+    fillExerciseSuggestions() {
+        const existing = new Set(this.exercisesForCategory(state.currentCategory).map(ex => ex.name.toLowerCase()));
+        const list = document.getElementById('ex-suggestions');
+        const options = (EXERCISE_SUGGESTIONS[state.currentCategory] || [])
+            .filter(name => !existing.has(name.toLowerCase()));
+        list.innerHTML = options.map(name => `<option value="${escapeHtml(name)}"></option>`).join('');
     },
 
     async saveNewExercise() {
         const input = document.getElementById('new-ex-input');
         const name = input.value.trim();
         if (!name) return;
+
+        const duplicate = this.exercisesForCategory(state.currentCategory)
+            .some(ex => ex.name.toLowerCase() === name.toLowerCase());
+        if (duplicate) {
+            this.showToast('Deze oefening bestaat al');
+            return;
+        }
 
         const newExData = {
             category: state.currentCategory,
@@ -981,22 +1257,46 @@ const app = {
         try {
             const savedEx = await DB.saveExercise(newExData);
             if (savedEx) {
-                DB.exercises.push(savedEx);
-                input.value = '';
-                this.showAddExerciseForm(); // hide
-                this.renderExerciseList(); // re-render list
+                if (!DB.exercises.some(ex => ex.id === savedEx.id)) DB.exercises.push(savedEx);
+                this.hideAddExerciseForm();
+                this.renderExerciseList();
+                this.showToast(`${name} toegevoegd ✅`);
             }
         } catch (e) {
             this.showToast('Fout bij opslaan oefening.');
         }
     },
 
+    exerciseMetaText(ex) {
+        const done = this.sessionEntries(ex.id);
+        if (done.length > 0) {
+            const last = done[done.length - 1];
+            return `Vandaag: ${done.length} ${done.length === 1 ? 'set' : 'sets'} · laatste ${formatKg(last.weight)} kg × ${last.reps}`;
+        }
+        const prev = this.getPreviousSession(ex.id);
+        if (prev && prev.sets.length > 0) {
+            const top = prev.sets.reduce((a, b) => (Number(b.weight) > Number(a.weight) ? b : a));
+            return `${daysAgoLabel(prev.date)}: ${prev.sets.length} × ${formatKg(top.weight)} kg`;
+        }
+        return 'Nog niet gelogd';
+    },
+
     renderExerciseList() {
         const container = document.getElementById('exercise-list');
         container.innerHTML = '';
-        const filtered = DB.exercises.filter(ex => ex.category === state.currentCategory);
+        const filtered = this.exercisesForCategory(state.currentCategory);
+
+        if (filtered.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <p>Nog geen oefeningen voor ${escapeHtml(state.currentCategory || '')}.</p>
+                    <p>Voeg er hieronder één toe.</p>
+                </div>`;
+        }
 
         filtered.forEach(ex => {
+            const doneCount = this.sessionEntries(ex.id).length;
+
             const containerDiv = document.createElement('div');
             containerDiv.className = 'swipe-container';
 
@@ -1005,10 +1305,17 @@ const app = {
             actionDiv.innerHTML = '<ion-icon name="trash"></ion-icon>';
 
             const contentDiv = document.createElement('div');
-            contentDiv.className = 'swipe-content glass-card';
+            contentDiv.className = `swipe-content glass-card${doneCount > 0 ? ' done' : ''}`;
             contentDiv.style.border = 'none'; // handled by container
-            contentDiv.innerHTML = `<span>${ex.name}</span> <ion-icon name="chevron-forward"></ion-icon>`;
-            
+            contentDiv.innerHTML = `
+                <div class="ex-info">
+                    <span class="ex-name">${escapeHtml(ex.name)}</span>
+                    <span class="ex-meta">${escapeHtml(this.exerciseMetaText(ex))}</span>
+                </div>
+                ${doneCount > 0
+                    ? `<span class="ex-done-badge"><ion-icon name="checkmark"></ion-icon>${doneCount}</span>`
+                    : '<ion-icon name="chevron-forward"></ion-icon>'}`;
+
             // Swipe logic variables
             let startX = 0;
             let startY = 0;
@@ -1017,6 +1324,7 @@ const app = {
             let isSwiping = false;
             let hasMoved = false;
             let isVerticalScroll = false;
+            let handledByTouch = false;
 
             contentDiv.addEventListener('touchstart', (e) => {
                 startX = e.touches[0].clientX;
@@ -1031,10 +1339,10 @@ const app = {
 
             contentDiv.addEventListener('touchmove', (e) => {
                 if (!isSwiping || isVerticalScroll) return;
-                
+
                 currentX = e.touches[0].clientX;
                 currentY = e.touches[0].clientY;
-                
+
                 const diffX = currentX - startX;
                 const diffY = currentY - startY;
 
@@ -1059,13 +1367,15 @@ const app = {
             contentDiv.addEventListener('touchend', (e) => {
                 if (!isSwiping) return;
                 isSwiping = false;
+                handledByTouch = true;
+                setTimeout(() => { handledByTouch = false; }, 400);
 
                 if (isVerticalScroll) {
                     contentDiv.style.transition = 'transform 0.2s ease-out';
                     contentDiv.style.transform = `translateX(0)`;
                     return;
                 }
-                
+
                 // Use currentX from touchmove for more reliability
                 const diffX = currentX - startX;
                 contentDiv.style.transition = 'transform 0.2s ease-out';
@@ -1079,7 +1389,7 @@ const app = {
                 } else {
                     // Snap back
                     contentDiv.style.transform = `translateX(0)`;
-                    
+
                     // If it was a clean tap (minimal movement)
                     if (!hasMoved || (Math.abs(diffX) < 15 && !isVerticalScroll)) {
                         this.selectExercise(ex);
@@ -1087,9 +1397,9 @@ const app = {
                 }
             });
 
-            // Desktop click fallback (only if not a touch device)
-            contentDiv.onclick = (e) => {
-                if (!hasMoved) {
+            // Desktop click fallback (touch is al afgehandeld in touchend)
+            contentDiv.onclick = () => {
+                if (!hasMoved && !handledByTouch) {
                     this.selectExercise(ex);
                 }
             };
@@ -1098,18 +1408,43 @@ const app = {
             containerDiv.appendChild(contentDiv);
             container.appendChild(containerDiv);
         });
+
+        this.updateWorkoutSummary();
+    },
+
+    updateWorkoutSummary() {
+        const el = document.getElementById('workout-session-summary');
+        if (!el) return;
+        if (state.sessionSets > 0) {
+            const exCount = Object.keys(state.sessionExercises).length;
+            el.innerText = `${exCount} oef. · ${state.sessionSets} sets · ${formatKg(state.sessionVolume)} kg`;
+            el.hidden = false;
+        } else {
+            el.hidden = true;
+        }
     },
 
     async deleteExercise(id) {
         // Find index in cache
         const index = DB.exercises.findIndex(ex => ex.id === id);
         if (index > -1) {
+            const ex = DB.exercises[index];
+            const logCount = (state.logsCache[id] || []).length;
+            const question = logCount > 0
+                ? `"${ex.name}" verwijderen? Ook de ${logCount} gelogde sets worden verwijderd.`
+                : `"${ex.name}" verwijderen?`;
+            if (!window.confirm(question)) {
+                this.renderExerciseList();
+                return;
+            }
             try {
                 await DB.deleteExercise(id);
                 DB.exercises.splice(index, 1);
+                delete state.logsCache[id];
                 this.renderExerciseList();
             } catch (e) {
                 this.showToast('Fout bij verwijderen.');
+                this.renderExerciseList();
             }
         }
     },
@@ -1124,35 +1459,92 @@ const app = {
         state.currentExercise = exercise;
         document.getElementById('exercise-title').innerText = exercise.name;
 
-        // Reset per-oefening volume counters
-        const existing = state.sessionExercises[exercise.id];
-        state.exerciseVolume = existing ? existing.volume : 0;
-        state.exerciseSets = existing ? existing.sets : 0;
+        // Direct tonen met gecachte data, daarna verversen
+        if (state.logsCache[exercise.id]) this.cacheLogs(exercise.id, state.logsCache[exercise.id]);
+        this.prepareNextSet();
+        this.renderLogScreen();
+        this.navTo('log');
 
-        // Fetch all logs to determine all-time PR
         const logs = await DB.getLogsForExercise(exercise.id);
-        state.lastLog = logs.length > 0 ? logs[0] : null;
+        if (!state.currentExercise || state.currentExercise.id !== exercise.id) return;
+        this.cacheLogs(exercise.id, logs);
+        if (!state.dirty) this.prepareNextSet();
+        this.renderLogScreen();
+    },
 
-        // Bepaal all-time PR voor deze oefening
-        if (logs.length > 0) {
-            state.allTimePRs[exercise.id] = Math.max(...logs.map(l => l.weight));
+    goToNextExercise() {
+        const next = this.getNextExercise();
+        if (next) this.selectExercise(next);
+    },
+
+    getNextExercise() {
+        if (!state.currentExercise) return null;
+        const list = this.exercisesForCategory(state.currentExercise.category);
+        const idx = list.findIndex(ex => ex.id === state.currentExercise.id);
+        // Eerst de volgende oefening die nog niet gedaan is, anders gewoon de volgende
+        const after = list.slice(idx + 1).concat(list.slice(0, idx));
+        return after.find(ex => this.sessionEntries(ex.id).length === 0) || list[idx + 1] || null;
+    },
+
+    renderLogScreen() {
+        if (!state.currentExercise) return;
+        const exId = state.currentExercise.id;
+        const entries = this.sessionEntries(exId);
+        const setNr = entries.length + 1;
+        const prev = this.getPreviousSession(exId);
+
+        document.getElementById('set-number').innerText = `Set ${setNr}`;
+        document.getElementById('log-btn-label').innerText = `Log set ${setNr}`;
+
+        const target = prev ? prev.sets[entries.length] : null;
+        let hint;
+        if (target) hint = `Vorige keer: ${formatKg(target.weight)} kg × ${target.reps}`;
+        else if (prev) hint = `Extra set t.o.v. vorige keer 💪`;
+        else hint = entries.length === 0 ? 'Eerste keer — kies een startgewicht' : '';
+        document.getElementById('set-hint').innerText = hint;
+
+        // Vandaag gelogde sets
+        const todaySection = document.getElementById('today-section');
+        todaySection.hidden = entries.length === 0;
+        document.getElementById('today-sets').innerHTML = entries.map((e, i) => `
+            <div class="set-chip done">
+                <span class="set-chip-idx">${i + 1}</span>
+                <span>${formatKg(e.weight)} kg × ${e.reps}</span>
+                <button class="set-chip-del" onclick="app.deleteSessionSet(${i})" aria-label="Set ${i + 1} verwijderen">
+                    <ion-icon name="close"></ion-icon>
+                </button>
+            </div>`).join('');
+
+        // Vorige training — tik om over te nemen
+        const prevSection = document.getElementById('prev-section');
+        prevSection.hidden = !prev;
+        if (prev) {
+            document.getElementById('prev-title').innerText = `Vorige keer · ${daysAgoLabel(prev.date)}`;
+            document.getElementById('prev-sets').innerHTML = prev.sets.map((s, i) => `
+                <button class="set-chip prev${i === entries.length ? ' target' : ''}" onclick="app.applyPrevSet(${i})">
+                    <span class="set-chip-idx">${i + 1}</span>
+                    <span>${formatKg(s.weight)} kg × ${s.reps}</span>
+                </button>`).join('');
         }
 
-        if (state.lastLog) {
-            state.weight = state.lastLog.weight;
-            state.reps = state.lastLog.reps;
-            document.getElementById('use-last-bar').style.display = 'flex';
-            document.getElementById('last-weight-val').innerText = state.lastLog.weight;
-            document.getElementById('last-reps-val').innerText = state.lastLog.reps;
-        } else {
-            state.weight = 20; // default start
-            state.reps = 10;
-            document.getElementById('use-last-bar').style.display = 'none';
-        }
+        // Volgende oefening
+        const next = this.getNextExercise();
+        const nextBtn = document.getElementById('next-ex-btn');
+        nextBtn.hidden = !next;
+        if (next) document.getElementById('next-ex-name').innerText = next.name;
 
         this.updateCounters();
         this.updateVolumeBadge();
-        this.navTo('log');
+    },
+
+    applyPrevSet(index) {
+        const prev = this.getPreviousSession(state.currentExercise.id);
+        if (!prev || !prev.sets[index]) return;
+        state.weight = Number(prev.sets[index].weight);
+        state.reps = Number(prev.sets[index].reps);
+        state.dirty = true;
+        this.vibrate(20);
+        this.updateCounters();
     },
 
     // --- Helpers ---
@@ -1173,28 +1565,33 @@ const app = {
             particleCount: 120,
             spread: 80,
             origin,
-            colors: ['#00ffa3', '#6366f1', '#ffffff', '#ffd700'],
+            colors: ['#FF1A55', '#ffffff', '#E6003D', '#ffd700'],
             zIndex: 9999
         });
     },
 
     updateVolumeBadge() {
+        const se = state.currentExercise ? state.sessionExercises[state.currentExercise.id] : null;
+        state.exerciseVolume = se ? se.volume : 0;
+        state.exerciseSets = se ? se.sets : 0;
+
         // Per oefening
         const exVol = document.getElementById('exercise-volume-badge');
         if (exVol) {
-            exVol.innerText = `${state.exerciseSets} sets · ${state.exerciseVolume.toLocaleString('nl-NL')} kg`;
+            exVol.innerText = `${state.exerciseSets} sets · ${formatKg(state.exerciseVolume)} kg`;
         }
         // Totaal sessie
         const sesVol = document.getElementById('session-volume-badge');
         if (sesVol) {
-            sesVol.innerText = `Sessie: ${state.sessionSets} sets · ${state.sessionVolume.toLocaleString('nl-NL')} kg`;
+            sesVol.innerText = `Sessie: ${state.sessionSets} sets · ${formatKg(state.sessionVolume)} kg`;
         }
     },
 
     updateWeight(delta) {
-        const newVal = Math.round((state.weight + delta) * 10) / 10;
-        if (newVal >= 0 && newVal <= 300) {
+        const newVal = Math.round((state.weight + delta) * 100) / 100;
+        if (newVal >= 0 && newVal <= MAX_WEIGHT) {
             state.weight = newVal;
+            state.dirty = true;
             this.vibrate(20);
             this.updateCounters();
         }
@@ -1202,84 +1599,196 @@ const app = {
 
     updateReps(delta) {
         const newVal = state.reps + delta;
-        if (newVal >= 0 && newVal <= 50) {
+        if (newVal >= 0 && newVal <= MAX_REPS) {
             state.reps = newVal;
+            state.dirty = true;
             this.vibrate(20);
             this.updateCounters();
         }
     },
 
+    // Direct typen in het gewicht/reps-veld
+    onWeightInput(el) {
+        const v = parseFloat(el.value.replace(',', '.'));
+        if (!isNaN(v) && v >= 0 && v <= MAX_WEIGHT) {
+            state.weight = Math.round(v * 100) / 100;
+            state.dirty = true;
+            this.updateOneRM();
+        }
+    },
+
+    onRepsInput(el) {
+        const v = parseInt(el.value, 10);
+        if (!isNaN(v) && v >= 0 && v <= MAX_REPS) {
+            state.reps = v;
+            state.dirty = true;
+            this.updateOneRM();
+        }
+    },
+
     updateCounters() {
-        document.getElementById('current-weight').innerText = state.weight;
-        document.getElementById('current-reps').innerText = state.reps;
+        document.getElementById('current-weight').value = formatInputNumber(state.weight);
+        document.getElementById('current-reps').value = state.reps;
+        this.updateOneRM();
+    },
+
+    updateOneRM() {
         // Live 1RM
         const oneRM = this.calculate1RM(state.weight, state.reps);
         const el = document.getElementById('one-rm-display');
-        if (el) el.innerText = oneRM > 0 ? `Est. 1RM: ${oneRM} kg` : '';
+        if (el) el.innerText = oneRM > 0 ? `Geschat 1RM: ${formatKg(oneRM)} kg` : '';
     },
 
     useLastWeight() {
         if (state.lastLog) {
-            state.weight = state.lastLog.weight;
+            state.weight = Number(state.lastLog.weight);
             this.updateCounters();
         }
     },
 
     useLastReps() {
         if (state.lastLog) {
-            state.reps = state.lastLog.reps;
+            state.reps = Number(state.lastLog.reps);
             this.updateCounters();
         }
     },
 
     async submitLog() {
+        if (state.saving || !state.currentExercise) return;
+
+        // Waarden uit een nog gefocust invoerveld meenemen
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+
         const exId = state.currentExercise.id;
         const exName = state.currentExercise.name;
         const weight = state.weight;
         const reps = state.reps;
         const volume = weight * reps;
 
-        // --- PR detectie (voor opslaan controleren we de huidige PR) ---
+        if (reps <= 0) {
+            this.showToast('Vul minstens 1 rep in');
+            return;
+        }
+
+        const btn = document.getElementById('log-btn');
+        state.saving = true;
+        btn.disabled = true;
+
+        try {
+            await DB.saveLog({ exerciseId: exId, weight, reps });
+        } catch (e) {
+            this.showToast('Opslaan mislukt — check je verbinding');
+            state.saving = false;
+            btn.disabled = false;
+            return;
+        }
+
+        // --- PR detectie (vergeleken met de PR van vóór deze set) ---
         const prevPR = state.allTimePRs[exId] || 0;
         const isPR = weight > prevPR && reps > 0 && weight > 0;
         if (isPR) state.allTimePRs[exId] = weight;
-
-        await DB.saveLog({ exerciseId: exId, weight, reps });
 
         // --- Haptic ---
         this.vibrate(isPR ? [60, 40, 60] : 80);
 
         // --- Volume bijhouden ---
+        if (!state.sessionStartedAt) state.sessionStartedAt = Date.now();
         state.sessionVolume += volume;
         state.sessionSets += 1;
-        state.exerciseVolume += volume;
-        state.exerciseSets += 1;
 
         // Per-oefening opslaan in sessionExercises
         if (!state.sessionExercises[exId]) {
-            state.sessionExercises[exId] = { name: exName, volume: 0, sets: 0 };
+            state.sessionExercises[exId] = { name: exName, volume: 0, sets: 0, entries: [] };
         }
-        state.sessionExercises[exId].volume += volume;
-        state.sessionExercises[exId].sets += 1;
-
-        this.updateVolumeBadge();
+        const se = state.sessionExercises[exId];
+        if (!se.entries) se.entries = [];
+        se.volume += volume;
+        se.sets += 1;
+        const entry = { id: null, weight, reps };
+        se.entries.push(entry);
 
         // --- PR toast of normale toast ---
         if (isPR) {
-            this.showToast('🏆 Personal Record! ' + weight + ' kg', true);
+            this.showToast('🏆 Personal Record! ' + formatKg(weight) + ' kg', true);
             this.triggerConfetti();
         } else {
             this.showToast('Set Opgeslagen 🚀');
         }
 
-        this.startRestTimer(180);
+        this.startRestTimer(state.restDefault);
 
-        // Feedback cycle: update lastLog context
+        // Feedback cycle: logs verversen zodat we de id van deze set kennen
+        try {
+            const logs = await DB.getLogsForExercise(exId);
+            const knownIds = new Set(se.entries.map(e => e.id).filter(Boolean));
+            const match = logs.find(l => !knownIds.has(l.id) && Number(l.weight) === weight && Number(l.reps) === reps);
+            if (match) entry.id = match.id;
+            const pr = state.allTimePRs[exId];
+            this.cacheLogs(exId, logs);
+            if (pr && (!state.allTimePRs[exId] || pr > state.allTimePRs[exId])) state.allTimePRs[exId] = pr;
+        } catch (e) {
+            console.warn('Kon logs niet verversen:', e);
+        }
+
+        this.persistSession();
+        if (state.currentExercise && state.currentExercise.id === exId) {
+            this.prepareNextSet();
+            this.renderLogScreen();
+        }
+
+        state.saving = false;
+        btn.disabled = false;
+    },
+
+    async deleteSessionSet(index) {
+        if (!state.currentExercise || state.saving) return;
+        const exId = state.currentExercise.id;
+        const se = state.sessionExercises[exId];
+        if (!se || !se.entries || !se.entries[index]) return;
+        const entry = se.entries[index];
+
+        state.saving = true;
+        try {
+            if (!entry.id) {
+                // id onbekend (verversen mislukte) — zoek de bijbehorende log op
+                const logs = await DB.getLogsForExercise(exId);
+                const knownIds = new Set(se.entries.map(e => e.id).filter(Boolean));
+                const match = logs.find(l => !knownIds.has(l.id) && Number(l.weight) === entry.weight && Number(l.reps) === entry.reps);
+                if (!match) throw new Error('Log niet gevonden');
+                entry.id = match.id;
+            }
+            await DB.deleteLog(entry.id);
+        } catch (e) {
+            this.showToast('Fout bij verwijderen.');
+            state.saving = false;
+            return;
+        }
+
+        const volume = entry.weight * entry.reps;
+        se.entries.splice(index, 1);
+        se.volume -= volume;
+        se.sets -= 1;
+        state.sessionVolume -= volume;
+        state.sessionSets -= 1;
+        if (se.sets <= 0) delete state.sessionExercises[exId];
+        if (state.sessionSets <= 0) state.sessionStartedAt = null;
+
         const logs = await DB.getLogsForExercise(exId);
-        state.lastLog = logs[0];
-        document.getElementById('use-last-bar').style.display = 'flex';
-        document.getElementById('last-weight-val').innerText = state.lastLog.weight;
-        document.getElementById('last-reps-val').innerText = state.lastLog.reps;
+        this.cacheLogs(exId, logs);
+
+        this.persistSession();
+        this.prepareNextSet();
+        this.renderLogScreen();
+        this.vibrate(30);
+        this.showToast('Set verwijderd 🗑️');
+        state.saving = false;
+    },
+
+    // Verwijdert de laatst gelogde set van deze sessie voor de huidige oefening
+    async undoLastLog() {
+        if (!state.currentExercise) return;
+        const entries = this.sessionEntries(state.currentExercise.id);
+        if (entries.length > 0) await this.deleteSessionSet(entries.length - 1);
     },
 
     startRestTimer(seconds = 180) {
@@ -1304,12 +1813,23 @@ const app = {
                 if (labelEl) labelEl.innerText = 'Klaar';
                 clearInterval(state.restTimerId);
                 state.restTimerId = null;
+                this.vibrate([200, 100, 200]);
                 this.showToast('Klaar voor de volgende set 💪');
                 setTimeout(() => this.dismissRestTimer(), 2500);
                 return;
             }
             timeEl.innerText = this.formatRestTime(state.restSecondsLeft);
         }, 1000);
+    },
+
+    // +/- 30 seconden; de nieuwe duur wordt onthouden als standaard
+    adjustRestTimer(delta) {
+        if (!state.restTimerId) return;
+        state.restSecondsLeft = Math.max(5, state.restSecondsLeft + delta);
+        state.restDefault = Math.min(600, Math.max(30, state.restDefault + delta));
+        localStorage.setItem(REST_KEY, String(state.restDefault));
+        document.getElementById('rest-timer-time').innerText = this.formatRestTime(state.restSecondsLeft);
+        this.vibrate(20);
     },
 
     formatRestTime(totalSeconds) {
@@ -1333,43 +1853,13 @@ const app = {
         }
     },
 
-    async undoLastLog() {
-        if (!state.lastLog) return;
-        
-        const btn = document.getElementById('undo-btn');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = 'Even geduld... <ion-icon name="hourglass-outline"></ion-icon>';
-        btn.disabled = true;
-
-        try {
-            await DB.deleteLog(state.lastLog.id);
-            
-            // Refresh lastLog state
-            const logs = await DB.getLogsForExercise(state.currentExercise.id);
-            state.lastLog = logs.length > 0 ? logs[0] : null;
-            
-            if (state.lastLog) {
-                document.getElementById('last-weight-val').innerText = state.lastLog.weight;
-                document.getElementById('last-reps-val').innerText = state.lastLog.reps;
-            } else {
-                document.getElementById('use-last-bar').style.display = 'none';
-            }
-            
-            this.showToast('Laatste set verwijderd! 🗑️');
-        } catch (e) {
-            this.showToast('Fout bij verwijderen.');
-        } finally {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-        }
-    },
-
     showToast(msg = 'Set Opgeslagen 🚀', isPR = false) {
         const toast = document.getElementById('toast');
         document.getElementById('toast-msg').innerText = msg;
         toast.classList.toggle('toast-pr', isPR);
         toast.classList.add('show');
-        setTimeout(() => {
+        clearTimeout(state.toastTimeout);
+        state.toastTimeout = setTimeout(() => {
             toast.classList.remove('show');
             toast.classList.remove('toast-pr');
         }, isPR ? 2500 : 1500);
@@ -1397,16 +1887,16 @@ const app = {
         state.chart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: data.map(d => new Date(d.created_at).toLocaleDateString()),
+                labels: data.map(d => new Date(d.created_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })),
                 datasets: [{
                     label: 'Gewicht (kg)',
                     data: data.map(d => d.weight),
-                    borderColor: '#00ffa3',
-                    backgroundColor: 'rgba(0, 255, 163, 0.1)',
+                    borderColor: '#FF1A55',
+                    backgroundColor: 'rgba(255, 26, 85, 0.12)',
                     tension: 0.4,
                     fill: true,
                     pointRadius: 5,
-                    pointBackgroundColor: '#00ffa3'
+                    pointBackgroundColor: '#FF1A55'
                 }]
             },
             options: {
@@ -1420,7 +1910,7 @@ const app = {
                     },
                     x: {
                         grid: { display: false },
-                        ticks: { color: state.theme === 'light' ? '#64748b' : '#888' }
+                        ticks: { color: state.theme === 'light' ? '#64748b' : '#888', autoSkip: true, maxTicksLimit: 8 }
                     }
                 },
                 plugins: {
@@ -1430,11 +1920,16 @@ const app = {
         });
 
         // Summary
-        const best = data.length > 0 ? Math.max(...data.map(d => d.weight)) : 0;
+        const best = data.length > 0 ? Math.max(...data.map(d => Number(d.weight))) : 0;
+        const best1RM = data.length > 0 ? Math.max(...data.map(d => this.calculate1RM(Number(d.weight), Number(d.reps)))) : 0;
         document.getElementById('stats-summary').innerHTML = `
             <div class="summary-card glass-card">
                 <small>PERSOONLIJK RECORD</small>
-                <h3>${best} kg</h3>
+                <h3>${formatKg(best)} kg</h3>
+            </div>
+            <div class="summary-card glass-card">
+                <small>BESTE GESCHATTE 1RM</small>
+                <h3 style="color: var(--primary);">${formatKg(best1RM)} kg</h3>
             </div>
         `;
     },
@@ -1451,14 +1946,17 @@ const app = {
         } else {
             exerciseRows = exercises.map(ex => `
                 <div class="finish-exercise-row">
-                    <span class="finish-ex-name">${ex.name}</span>
-                    <span class="finish-ex-stats">${ex.sets} sets · ${ex.volume.toLocaleString('nl-NL')} kg</span>
+                    <span class="finish-ex-name">${escapeHtml(ex.name)}</span>
+                    <span class="finish-ex-stats">${ex.sets} sets · ${formatKg(ex.volume)} kg</span>
                 </div>
             `).join('');
         }
 
-        document.getElementById('finish-total-volume').innerText = totalVolume.toLocaleString('nl-NL') + ' kg';
+        const minutes = state.sessionStartedAt ? Math.max(1, Math.round((Date.now() - state.sessionStartedAt) / 60000)) : 0;
+
+        document.getElementById('finish-total-volume').innerText = formatKg(totalVolume) + ' kg';
         document.getElementById('finish-total-sets').innerText = totalSets;
+        document.getElementById('finish-duration').innerText = minutes > 0 ? `${minutes} min` : '–';
         document.getElementById('finish-exercise-list').innerHTML = exerciseRows;
 
         this.dismissRestTimer();
@@ -1474,11 +1972,32 @@ const app = {
         state.sessionVolume = 0;
         state.sessionSets = 0;
         state.sessionExercises = {};
+        state.sessionStartedAt = null;
         state.exerciseVolume = 0;
         state.exerciseSets = 0;
+        state.currentExercise = null;
+        this.persistSession();
         this.updateVolumeBadge();
-        this.navTo('launch');
+        this.navToMode('launch', document.getElementById('nav-workout-btn'));
+    },
+
+    bindKeyboardShortcuts() {
+        const onEnter = (id, fn) => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); fn(); }
+            });
+        };
+        ['name-input', 'email-input', 'password-input'].forEach(id => onEnter(id, () => this.handleAuth()));
+        onEnter('forgot-email-input', () => this.sendPasswordReset());
+        ['reset-password-input', 'reset-password-confirm'].forEach(id => onEnter(id, () => this.submitNewPassword()));
+        onEnter('new-ex-input', () => this.saveNewExercise());
+        onEnter('current-weight', () => document.activeElement.blur());
+        onEnter('current-reps', () => document.activeElement.blur());
     }
 };
 
-window.onload = () => app.start();
+window.onload = () => {
+    app.bindKeyboardShortcuts();
+    app.start();
+};
