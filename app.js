@@ -308,6 +308,8 @@ const SESSION_KEY = 'fasttrack_session';
 const REST_KEY = 'fasttrack_rest_seconds';
 const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const MAX_WEIGHT = 500;
+const PLATE_MODE_KEY = 'fasttrack_plate_mode';   // { exerciseId: true } per oefening
+const PLATE_SIZES = [25, 20, 15, 10, 5, 2.5, 1.25];
 const MAX_REPS = 100;
 const SPLITS = ['Push', 'Pull', 'Legs'];
 const EXERCISE_SUGGESTIONS = {
@@ -370,6 +372,8 @@ const state = {
     logsCache: {},              // { exerciseId: logs (nieuwste eerst) }
     restDefault: parseInt(localStorage.getItem(REST_KEY), 10) || 180,
     dirty: false,               // gebruiker heeft gewicht/reps zelf aangepast
+    plateMode: false,           // gewicht invoeren via platen (stang telt niet mee)
+    plates: [],                 // platen per kant, in volgorde van opladen
     saving: false,
     toastTimeout: null
 };
@@ -1458,6 +1462,7 @@ const app = {
 
         state.currentExercise = exercise;
         document.getElementById('exercise-title').innerText = exercise.name;
+        this.applyPlateMode(!!this.getPlateModes()[exercise.id]);
 
         // Direct tonen met gecachte data, daarna verversen
         if (state.logsCache[exercise.id]) this.cacheLogs(exercise.id, state.logsCache[exercise.id]);
@@ -1629,7 +1634,107 @@ const app = {
     updateCounters() {
         document.getElementById('current-weight').value = formatInputNumber(state.weight);
         document.getElementById('current-reps').value = state.reps;
+        if (state.plateMode) this.renderPlates();
         this.updateOneRM();
+    },
+
+    // --- Platen-modus: tik op een plaat = aan beide kanten erbij ---
+    getPlateModes() {
+        try { return JSON.parse(localStorage.getItem(PLATE_MODE_KEY)) || {}; } catch { return {}; }
+    },
+
+    setPlateMode(on) {
+        if (!state.currentExercise) return;
+        const modes = this.getPlateModes();
+        if (on) modes[state.currentExercise.id] = true;
+        else delete modes[state.currentExercise.id];
+        localStorage.setItem(PLATE_MODE_KEY, JSON.stringify(modes));
+        this.vibrate(15);
+        this.applyPlateMode(on);
+    },
+
+    applyPlateMode(on) {
+        state.plateMode = on;
+        state.plates = [];
+        document.getElementById('plate-loader').hidden = !on;
+        document.getElementById('weight-stepper').hidden = on;
+        const stepBtn = document.getElementById('mode-stepper-btn');
+        const plateBtn = document.getElementById('mode-plates-btn');
+        stepBtn.classList.toggle('active', !on);
+        plateBtn.classList.toggle('active', on);
+        stepBtn.setAttribute('aria-pressed', String(!on));
+        plateBtn.setAttribute('aria-pressed', String(on));
+        if (on) this.renderPlates();
+    },
+
+    // Platen per kant afleiden uit het totaalgewicht (grootste eerst)
+    platesForWeight(total) {
+        let rest = Math.round((total / 2) * 100) / 100;
+        const plates = [];
+        for (const p of PLATE_SIZES) {
+            while (rest >= p - 1e-9) {
+                plates.push(p);
+                rest = Math.round((rest - p) * 100) / 100;
+            }
+        }
+        return { plates, rest };
+    },
+
+    addPlate(size) {
+        const newVal = Math.round((state.weight + size * 2) * 100) / 100;
+        if (newVal > MAX_WEIGHT) return;
+        this.syncPlates();
+        state.plates.push(size);
+        state.plates.sort((a, b) => b - a);   // zwaarste binnen, lichtste buiten
+        state.weight = newVal;
+        state.dirty = true;
+        this.vibrate(20);
+        this.updateCounters();
+    },
+
+    removePlate(index) {
+        this.syncPlates();
+        const size = state.plates[index];
+        if (size === undefined) return;
+        state.plates.splice(index, 1);
+        state.weight = Math.max(0, Math.round((state.weight - size * 2) * 100) / 100);
+        state.dirty = true;
+        this.vibrate(20);
+        this.updateCounters();
+    },
+
+    clearPlates() {
+        state.plates = [];
+        state.weight = 0;
+        state.dirty = true;
+        this.vibrate(30);
+        this.updateCounters();
+    },
+
+    // Klopt de platenlijst niet meer met het gewicht (voorinvullen, typen), dan opnieuw opbouwen
+    syncPlates() {
+        const sum = state.plates.reduce((a, b) => a + b, 0) * 2;
+        if (Math.abs(sum - state.weight) > 1e-6) {
+            state.plates = this.platesForWeight(state.weight).plates;
+        }
+    },
+
+    renderPlates() {
+        this.syncPlates();
+        const perSideSum = state.plates.reduce((a, b) => a + b, 0);
+        const rest = Math.round((state.weight / 2 - perSideSum) * 100) / 100;
+
+        document.getElementById('plate-total-kg').innerText = formatKg(state.weight);
+        document.getElementById('plate-per-side').innerText = rest > 0
+            ? `${formatKg(perSideSum)} kg + ${formatKg(rest)} kg per kant`
+            : `${formatKg(perSideSum)} kg per kant`;
+
+        const holder = document.getElementById('bar-plates');
+        holder.innerHTML = state.plates.length === 0
+            ? '<span class="bar-empty">Tik op een plaat</span>'
+            : state.plates.map((p, i) => `
+                <button class="bar-plate p${String(p).replace('.', '_')}" onclick="app.removePlate(${i})"
+                    aria-label="${formatKg(p)} kg verwijderen">${formatKg(p)}</button>`).reverse().join('');
     },
 
     updateOneRM() {

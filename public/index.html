@@ -247,8 +247,41 @@
 
                 <!-- Modifiers: tik op het getal om te typen -->
                 <div class="modifier-group">
-                    <label class="mod-label" for="current-weight">Gewicht (kg)</label>
-                    <div class="stepper weight-stepper">
+                    <div class="mod-label-row">
+                        <label class="mod-label" for="current-weight">Gewicht (kg)</label>
+                        <div class="mode-toggle" role="group" aria-label="Invoermanier gewicht">
+                            <button id="mode-stepper-btn" class="mode-opt active" onclick="app.setPlateMode(false)" aria-pressed="true">± KG</button>
+                            <button id="mode-plates-btn" class="mode-opt" onclick="app.setPlateMode(true)" aria-pressed="false">Platen</button>
+                        </div>
+                    </div>
+
+                    <!-- Plate mode: tik op een plaat = aan beide kanten erbij -->
+                    <div id="plate-loader" class="plate-loader" hidden>
+                        <div class="plate-total">
+                            <span id="plate-total-kg" class="plate-total-kg">0</span>
+                            <span class="plate-total-unit">kg</span>
+                            <span id="plate-per-side" class="plate-per-side">0 kg per kant</span>
+                        </div>
+                        <div class="bar-visual" aria-label="Platen per kant (tik om te verwijderen)">
+                            <div class="bar-shaft"></div>
+                            <div id="bar-plates" class="bar-plates"></div>
+                            <div class="bar-collar"></div>
+                        </div>
+                        <div class="plate-buttons">
+                            <button class="plate-btn p25" onclick="app.addPlate(25)">25</button>
+                            <button class="plate-btn p20" onclick="app.addPlate(20)">20</button>
+                            <button class="plate-btn p15" onclick="app.addPlate(15)">15</button>
+                            <button class="plate-btn p10" onclick="app.addPlate(10)">10</button>
+                            <button class="plate-btn p5" onclick="app.addPlate(5)">5</button>
+                            <button class="plate-btn p2_5" onclick="app.addPlate(2.5)">2,5</button>
+                            <button class="plate-btn p1_25" onclick="app.addPlate(1.25)">1,25</button>
+                            <button class="plate-btn plate-clear" onclick="app.clearPlates()" aria-label="Alle platen eraf">
+                                <ion-icon name="refresh-outline"></ion-icon>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="weight-stepper" class="stepper weight-stepper">
                         <button class="step-btn step-btn-coarse" onclick="app.updateWeight(-5)" aria-label="-5 kg">−5</button>
                         <button class="step-btn" onclick="app.updateWeight(-1)" aria-label="-1 kg">
                             <ion-icon name="remove-outline"></ion-icon>

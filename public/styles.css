@@ -793,6 +793,194 @@ body {
     letter-spacing: 0.1em;
 }
 
+.mod-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+/* Toggle ± KG / Platen */
+.mode-toggle {
+    display: flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 3px;
+    gap: 3px;
+}
+
+.mode-opt {
+    min-height: 44px;
+    padding: 0 14px;
+    border: none;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-cond);
+    font-size: 0.95rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+}
+
+.mode-opt.active {
+    background: var(--accent-fill);
+    color: #fff;
+}
+
+/* Platen-modus */
+.plate-loader {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+}
+
+.plate-total {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.plate-total-kg {
+    font-family: var(--font-display);
+    font-size: 3rem;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.plate-total-unit {
+    font-family: var(--font-cond);
+    font-weight: 700;
+    font-size: 1.2rem;
+    text-transform: uppercase;
+}
+
+.plate-per-side {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.bar-visual {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 96px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.bar-visual::-webkit-scrollbar { display: none; }
+
+.bar-shaft {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 10px;
+    transform: translateY(-50%);
+    background: linear-gradient(#9a9a9a, #5c5c5c);
+    border-radius: 2px;
+}
+
+.bar-collar {
+    position: relative;
+    flex-shrink: 0;
+    width: 14px;
+    height: 34px;
+    margin-left: 3px;
+    background: linear-gradient(#bdbdbd, #6e6e6e);
+    border-radius: 2px;
+}
+
+.bar-plates {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding-left: 8px;
+}
+
+.bar-empty {
+    margin-left: 12px;
+    padding: 4px 8px;
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+/* Plaatkleuren (per gewicht), hoogte loopt af met gewicht */
+.p25   { --plate: #D6202A; --plate-h: 92px; --plate-text: #fff; }
+.p20   { --plate: #1F5FD6; --plate-h: 86px; --plate-text: #fff; }
+.p15   { --plate: #E8B400; --plate-h: 78px; --plate-text: #000; }
+.p10   { --plate: #1E9E4A; --plate-h: 68px; --plate-text: #fff; }
+.p5    { --plate: #F2F2F2; --plate-h: 56px; --plate-text: #000; }
+.p2_5  { --plate: #3a3a3a; --plate-h: 46px; --plate-text: #fff; }
+.p1_25 { --plate: #A8A8A8; --plate-h: 38px; --plate-text: #000; }
+
+.bar-plate {
+    flex-shrink: 0;
+    width: 26px;
+    height: var(--plate-h);
+    background: var(--plate);
+    color: var(--plate-text);
+    border: none;
+    border-radius: 3px;
+    font-family: var(--font-cond);
+    font-weight: 700;
+    font-size: 0.75rem;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    cursor: pointer;
+    animation: plate-in 0.15s ease-out;
+}
+
+@keyframes plate-in {
+    from { transform: rotate(180deg) translateY(12px); opacity: 0; }
+    to   { transform: rotate(180deg); opacity: 1; }
+}
+
+.plate-buttons {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+.plate-btn {
+    min-height: 52px;
+    border: none;
+    border-radius: var(--radius);
+    background: var(--plate, var(--surface-2));
+    color: var(--plate-text, var(--text));
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.plate-btn:active {
+    transform: scale(0.92);
+}
+
+.plate-clear {
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+}
+
+:root.light-theme .p5 { --plate: #ffffff; }
+:root.light-theme .plate-btn.p5,
+:root.light-theme .bar-plate.p5 { box-shadow: inset 0 0 0 1px #bbb; }
+
 .stepper {
     display: flex;
     align-items: center;
