@@ -139,6 +139,10 @@ function createLocalDB() {
             LocalStore.setLogs(LocalStore.getLogs().filter(l => l.exercise_id !== id));
         },
 
+        async updateExerciseMuscles(id, muscles) {
+            LocalStore.setExercises(LocalStore.getExercises().map(ex => ex.id === id ? { ...ex, muscles } : ex));
+        },
+
         async seedDemoData() {
             const defaults = [
                 { category: 'Push', name: 'Bench Press' },
@@ -297,6 +301,23 @@ function createSupabaseDB() {
                 console.error("Delete Exercise Error:", error);
                 throw error;
             }
+        },
+
+        // muscles: { primary, secondary: [] } of null (= automatisch herkennen)
+        async updateExerciseMuscles(id, muscles) {
+            const session = await this.getSession();
+            if (!session) return;
+
+            const { error } = await supabaseClient
+                .from('fitness_exercises')
+                .update({ muscles })
+                .eq('id', id)
+                .eq('user_id', session.user.id);
+
+            if (error) {
+                console.error("Update Muscles Error:", error);
+                throw error;
+            }
         }
     };
 }
@@ -389,8 +410,104 @@ const state = {
     dirty: false,               // gebruiker heeft gewicht/reps zelf aangepast
     plateMode: false,           // gewicht invoeren via platen (stang telt niet mee)
     plates: [],                 // platen per kant, in volgorde van opladen
+    muscleEdit: null,           // { exId, primary, secondary } tijdens bewerken spieren
     saving: false,
     toastTimeout: null
+};
+
+// --- Spiergroepen: herkenning op naam + split, handmatige correctie gaat voor ---
+const MUSCLES = {
+    borst: 'Borst',
+    lats: 'Lats',
+    bovenrug: 'Bovenrug',
+    onderrug: 'Onderrug',
+    schouder_voor: 'Voorkant schouder',
+    schouder_zij: 'Zijkant schouder',
+    schouder_achter: 'Achterkant schouder',
+    biceps: 'Biceps',
+    triceps: 'Triceps',
+    quads: 'Quadriceps',
+    hamstrings: 'Hamstrings',
+    billen: 'Billen',
+    kuiten: 'Kuiten',
+    buik: 'Buik'
+};
+
+const MUSCLE_TARGET = { min: 10, max: 20 };   // sets per week per spiergroep
+const MUSCLE_WINDOW_DAYS = 28;
+
+// Specifiek vóór algemeen: "leg curl" moet niet als biceps tellen, "reverse fly" niet als borst
+const MUSCLE_RULES = [
+    { re: /\b(leg|hamstring|lying|seated|nordic) curl|nordic/, primary: 'hamstrings' },
+    { re: /\b(leg|quad) extension/, primary: 'quads' },
+    { re: /romanian|\brdl\b|stiff leg|good morning/, primary: 'hamstrings', secondary: ['billen', 'onderrug'] },
+    { re: /hip thrust|glute|abduct/, primary: 'billen', secondary: ['hamstrings'] },
+    { re: /calf|kuit/, primary: 'kuiten' },
+    { re: /back extension|hyperextension|rugstrek/, primary: 'onderrug', secondary: ['billen', 'hamstrings'] },
+    { re: /leg press|squat|lunge|step up|beenpers/, primary: 'quads', secondary: ['billen'] },
+    { re: /deadlift/, primary: 'hamstrings', secondary: ['billen', 'onderrug', 'bovenrug'] },
+    { re: /tricep|pushdown|push down|skull|french press|kickback/, primary: 'triceps' },
+    { re: /close grip bench|jm press/, primary: 'triceps', secondary: ['borst'] },
+    { re: /reverse fly|reverse pec|rear delt|face pull/, primary: 'schouder_achter', secondary: ['bovenrug'] },
+    { re: /upright row/, primary: 'schouder_zij', secondary: ['bovenrug'] },
+    { re: /lateral|side raise|zijwaarts/, primary: 'schouder_zij' },
+    { re: /front raise/, primary: 'schouder_voor' },
+    { re: /shoulder press|overhead press|\bohp\b|military|arnold|schouder/, primary: 'schouder_voor', secondary: ['triceps', 'schouder_zij'] },
+    { re: /shrug/, primary: 'bovenrug' },
+    { re: /incline.*(press|bench)|(press|bench).*incline/, primary: 'borst', secondary: ['schouder_voor', 'triceps'] },
+    { re: /bench|chest press|push ?up|\bdips?\b|borst/, primary: 'borst', secondary: ['triceps', 'schouder_voor'] },
+    { re: /\bfly|flye|pec deck|cable cross|crossover/, primary: 'borst', pull: { primary: 'schouder_achter', secondary: ['bovenrug'] } },
+    { re: /pulldown|pull down|pull ?up|chin ?up|\blat\b|pullover/, primary: 'lats', secondary: ['biceps'] },
+    { re: /\brow|roei/, primary: 'bovenrug', secondary: ['lats', 'biceps'] },
+    { re: /bicep|hammer|bayesian|preacher|spider|concentration/, primary: 'biceps' },
+    { re: /\bcurl/, primary: 'biceps', legs: { primary: 'hamstrings' } },
+    { re: /\bextension/, primary: 'triceps', legs: { primary: 'quads' } },
+    { re: /crunch|plank|\babs?\b|abdominal|sit ?up|leg raise|knee raise|russian twist|wood ?chop|buik|core/, primary: 'buik' }
+];
+
+// Voorstel om toe te voegen als een spiergroep achterblijft
+const MUSCLE_SUGGESTIONS = {
+    borst: { ex: 'Bench Press of Chest Fly', split: 'Push' },
+    lats: { ex: 'Lat Pulldown of Pull-up', split: 'Pull' },
+    bovenrug: { ex: 'Row of T-Bar Row', split: 'Pull' },
+    onderrug: { ex: 'Back Extension', split: 'Legs' },
+    schouder_voor: { ex: 'Shoulder Press', split: 'Push' },
+    schouder_zij: { ex: 'Lateral Raise', split: 'Push' },
+    schouder_achter: { ex: 'Reverse Fly of Face Pull', split: 'Pull' },
+    biceps: { ex: 'Bayesian Curl of Hammer Curl', split: 'Pull' },
+    triceps: { ex: 'Tricep Pushdown', split: 'Push' },
+    quads: { ex: 'Leg Extension of Hack Squat', split: 'Legs' },
+    hamstrings: { ex: 'Romanian Deadlift of Leg Curl', split: 'Legs' },
+    billen: { ex: 'Hip Thrust', split: 'Legs' },
+    kuiten: { ex: 'Calf Raise', split: 'Legs' },
+    buik: { ex: 'Crunch of Hanging Leg Raise', split: 'Legs' }
+};
+
+const Muscles = {
+    detect(name, category) {
+        const n = String(name || '').toLowerCase().replace(/[-_/().,]+/g, ' ').replace(/\s+/g, ' ').trim();
+        for (const rule of MUSCLE_RULES) {
+            if (!rule.re.test(n)) continue;
+            const variant = (category === 'Legs' && rule.legs) || (category === 'Pull' && rule.pull) || rule;
+            return { primary: variant.primary, secondary: variant.secondary || [] };
+        }
+        return null;
+    },
+
+    // Handmatige keuze (Supabase-kolom muscles) gaat voor automatische herkenning
+    forExercise(ex) {
+        const m = ex && ex.muscles;
+        if (m && MUSCLES[m.primary]) {
+            return { primary: m.primary, secondary: (m.secondary || []).filter(k => MUSCLES[k] && k !== m.primary), manual: true };
+        }
+        const auto = ex ? this.detect(ex.name, ex.category) : null;
+        return auto ? { ...auto, manual: false } : null;
+    },
+
+    label(m) {
+        if (!m) return '';
+        return [MUSCLES[m.primary], ...m.secondary.map(k => MUSCLES[k].toLowerCase())].join(' · ');
+    }
 };
 
 // --- 3. UI Logic ---
@@ -1206,6 +1323,214 @@ const app = {
             : 'Start je streak';
     },
 
+    // --- Spiergroepen-analyse ---
+    // Sets per week per spiergroep: hoofdspier telt 1, hulpspier ½. Gemiddeld over max. 4 weken.
+    computeMuscleStats() {
+        const now = Date.now();
+        const windowStart = now - MUSCLE_WINDOW_DAYS * 864e5;
+        const stats = {};
+        Object.keys(MUSCLES).forEach(k => { stats[k] = { sets: 0, last: null, exercises: {} }; });
+
+        let earliest = now;
+        let unknown = 0;
+        (DB.exercises || []).forEach(ex => {
+            const logs = state.logsCache[ex.id] || [];
+            if (logs.length === 0) return;
+            const m = Muscles.forExercise(ex);
+            logs.forEach(l => { earliest = Math.min(earliest, new Date(l.created_at).getTime()); });
+            if (!m) { unknown++; return; }
+
+            const recent = logs.filter(l => new Date(l.created_at).getTime() >= windowStart);
+            const lastTime = new Date(logs[0].created_at);
+            const add = (key, factor) => {
+                const s = stats[key];
+                s.sets += recent.length * factor;
+                if (!s.last || lastTime > s.last) s.last = lastTime;
+                if (recent.length > 0) s.exercises[ex.id] = { ex, sets: recent.length, factor };
+            };
+            add(m.primary, 1);
+            m.secondary.forEach(k => add(k, 0.5));
+        });
+
+        const spanDays = Math.min(MUSCLE_WINDOW_DAYS, Math.max(7, (now - earliest) / 864e5));
+        const weeks = spanDays / 7;
+        Object.values(stats).forEach(s => { s.perWeek = Math.round((s.sets / weeks) * 10) / 10; });
+        return { stats, weeks, fullWindow: spanDays >= MUSCLE_WINDOW_DAYS, unknown };
+    },
+
+    muscleTips({ stats, fullWindow }) {
+        const tips = [];
+        const period = fullWindow ? 'de laatste 4 weken' : 'sinds je begon';
+        const pw = k => stats[k].perWeek;
+        const suggest = k => `Probeer ${MUSCLE_SUGGESTIONS[k].ex} op ${MUSCLE_SUGGESTIONS[k].split}-dag.`;
+
+        // 1. Helemaal niet getraind
+        Object.keys(MUSCLES).filter(k => stats[k].sets === 0).slice(0, 2).forEach(k => {
+            tips.push({ level: 'bad', text: `<strong>${MUSCLES[k]}</strong> niet getraind ${period}. ${suggest(k)}` });
+        });
+
+        // 2. Balans duwen/trekken en voor/achter bovenbeen
+        const push = pw('borst') + pw('schouder_voor') + pw('triceps');
+        const pull = pw('lats') + pw('bovenrug') + pw('schouder_achter') + pw('biceps');
+        if (push > 0 && pull > 0 && (push / pull >= 1.5 || pull / push >= 1.5)) {
+            const more = push > pull ? 'duwt' : 'trekt';
+            const ratio = Math.round(Math.max(push / pull, pull / push) * 10) / 10;
+            tips.push({ level: 'warn', text: `Je <strong>${more} ${formatKg(ratio)}× zoveel</strong> als je ${more === 'duwt' ? 'trekt' : 'duwt'}. Streef naar ongeveer gelijk.` });
+        }
+        if (pw('quads') > 0 && pw('quads') >= 2 * pw('hamstrings')) {
+            tips.push({ level: 'warn', text: `<strong>Quadriceps</strong> krijgen veel meer werk dan <strong>hamstrings</strong>. ${suggest('hamstrings')}` });
+        }
+
+        // 3. Te weinig (maar wel iets)
+        Object.keys(MUSCLES)
+            .filter(k => stats[k].sets > 0 && pw(k) < MUSCLE_TARGET.min)
+            .sort((a, b) => pw(a) - pw(b))
+            .forEach(k => {
+                tips.push({ level: 'warn', text: `<strong>${MUSCLES[k]}</strong>: ${formatKg(pw(k))} sets/week, doel ${MUSCLE_TARGET.min}+. ${suggest(k)}` });
+            });
+
+        return tips.slice(0, 3);
+    },
+
+    renderMuscleAnalysis() {
+        const data = this.computeMuscleStats();
+        const { stats, fullWindow, unknown } = data;
+        const scaleMax = Math.max(MUSCLE_TARGET.max + 4, ...Object.values(stats).map(s => s.perWeek));
+        const statusOf = v => v === 0 ? 'none' : v < MUSCLE_TARGET.min ? 'low' : v <= MUSCLE_TARGET.max ? 'good' : 'high';
+        const icon = { none: '✕', low: '!', good: '✓', high: '↑' };
+
+        const tips = this.muscleTips(data);
+        const tipsHtml = tips.length
+            ? tips.map(t => `<li class="muscle-tip ${t.level}">${t.text}</li>`).join('')
+            : '<li class="muscle-tip good">Mooi in balans — alle spiergroepen krijgen genoeg werk 💪</li>';
+
+        const rows = Object.keys(MUSCLES)
+            .sort((a, b) => stats[b].perWeek - stats[a].perWeek)
+            .map(k => {
+                const s = stats[k];
+                const st = statusOf(s.perWeek);
+                const exList = Object.values(s.exercises)
+                    .sort((a, b) => b.sets * b.factor - a.sets * a.factor)
+                    .map(e => `
+                        <li>
+                            <span>${escapeHtml(e.ex.name)} <small>${e.factor === 1 ? '' : '(hulpspier)'}</small></span>
+                            <span class="muscle-ex-sets">${e.sets} sets</span>
+                            <button class="muscle-edit-btn" onclick="app.openMuscleEditor('${e.ex.id}')" aria-label="Spieren van ${escapeHtml(e.ex.name)} aanpassen">
+                                <ion-icon name="create-outline"></ion-icon>
+                            </button>
+                        </li>`).join('');
+                return `
+                    <details class="muscle-row ${st}">
+                        <summary>
+                            <span class="muscle-name">${MUSCLES[k]}</span>
+                            <span class="muscle-bar">
+                                <span class="muscle-zone" style="left:${MUSCLE_TARGET.min / scaleMax * 100}%;width:${(MUSCLE_TARGET.max - MUSCLE_TARGET.min) / scaleMax * 100}%"></span>
+                                <span class="muscle-fill" style="width:${Math.min(100, s.perWeek / scaleMax * 100)}%"></span>
+                            </span>
+                            <span class="muscle-val">${formatKg(s.perWeek)}</span>
+                            <span class="muscle-icon" aria-hidden="true">${icon[st]}</span>
+                        </summary>
+                        <div class="muscle-detail">
+                            <p>${s.last ? `Laatst getraind ${daysAgoLabel(s.last)}` : 'Nog nooit getraind'}</p>
+                            ${exList ? `<ul class="muscle-ex-list">${exList}</ul>` : `<p>${MUSCLE_SUGGESTIONS[k].ex} op ${MUSCLE_SUGGESTIONS[k].split}-dag traint deze spiergroep.</p>`}
+                        </div>
+                    </details>`;
+            }).join('');
+
+        const section = document.createElement('section');
+        section.className = 'muscle-analysis';
+        section.innerHTML = `
+            <div class="muscle-head">
+                <h3 class="sets-title">Spiergroepen</h3>
+                <span class="muscle-sub">sets per week · gem. ${fullWindow ? '4 weken' : 'sinds start'}</span>
+            </div>
+            ${fullWindow ? '' : '<p class="muscle-note">Nog weinig data — de analyse wordt nauwkeuriger na een paar weken trainen.</p>'}
+            ${unknown > 0 ? `<p class="muscle-note">${unknown} ${unknown === 1 ? 'oefening' : 'oefeningen'} niet herkend — open de oefening en tik op "Spieren instellen".</p>` : ''}
+            <ul class="muscle-tips">${tipsHtml}</ul>
+            <div class="muscle-legend"><span class="lg-zone"></span>doel ${MUSCLE_TARGET.min}–${MUSCLE_TARGET.max} sets/week · tik voor details</div>
+            <div class="muscle-list">${rows}</div>
+            <h3 class="sets-title muscle-ex-heading">Oefeningen</h3>`;
+        return section;
+    },
+
+    // Spieren-label op het logscherm
+    renderMuscleTag() {
+        const tag = document.getElementById('ex-muscles');
+        if (!tag || !state.currentExercise) return;
+        const m = Muscles.forExercise(state.currentExercise);
+        tag.classList.toggle('unknown', !m);
+        tag.innerHTML = m
+            ? `<span>${escapeHtml(Muscles.label(m))}</span><ion-icon name="create-outline"></ion-icon>`
+            : '<span>Spieren instellen</span><ion-icon name="add-outline"></ion-icon>';
+    },
+
+    // --- Spieren-editor (bottom sheet) ---
+    openMuscleEditor(exId) {
+        const ex = exId ? DB.exercises.find(e => e.id === exId) : state.currentExercise;
+        if (!ex) return;
+        const m = Muscles.forExercise(ex);
+        state.muscleEdit = {
+            exId: ex.id,
+            primary: m ? m.primary : null,
+            secondary: m ? [...m.secondary] : []
+        };
+        document.getElementById('muscle-sheet-title').innerText = ex.name;
+        document.getElementById('muscle-sheet-auto').hidden = !(ex.muscles);
+        this.renderMuscleEditor();
+        document.getElementById('muscle-sheet').hidden = false;
+    },
+
+    closeMuscleEditor() {
+        document.getElementById('muscle-sheet').hidden = true;
+        state.muscleEdit = null;
+    },
+
+    renderMuscleEditor() {
+        const e = state.muscleEdit;
+        const chip = (k, selected, fn, disabled) => `
+            <button class="muscle-chip${selected ? ' selected' : ''}" ${disabled ? 'disabled' : ''}
+                onclick="app.${fn}('${k}')" aria-pressed="${selected}">${MUSCLES[k]}</button>`;
+        document.getElementById('muscle-primary-chips').innerHTML =
+            Object.keys(MUSCLES).map(k => chip(k, e.primary === k, 'pickPrimaryMuscle')).join('');
+        document.getElementById('muscle-secondary-chips').innerHTML =
+            Object.keys(MUSCLES).map(k => chip(k, e.secondary.includes(k), 'toggleSecondaryMuscle', k === e.primary)).join('');
+        document.getElementById('muscle-save-btn').disabled = !e.primary;
+    },
+
+    pickPrimaryMuscle(k) {
+        const e = state.muscleEdit;
+        e.primary = k;
+        e.secondary = e.secondary.filter(s => s !== k);
+        this.vibrate(15);
+        this.renderMuscleEditor();
+    },
+
+    toggleSecondaryMuscle(k) {
+        const e = state.muscleEdit;
+        e.secondary = e.secondary.includes(k) ? e.secondary.filter(s => s !== k) : [...e.secondary, k];
+        this.vibrate(15);
+        this.renderMuscleEditor();
+    },
+
+    async saveMuscles(reset = false) {
+        const e = state.muscleEdit;
+        if (!e || (!reset && !e.primary)) return;
+        const muscles = reset ? null : { primary: e.primary, secondary: e.secondary };
+        try {
+            await DB.updateExerciseMuscles(e.exId, muscles);
+            DB.exercises = DB.exercises.map(ex => ex.id === e.exId ? { ...ex, muscles } : ex);
+            if (state.currentExercise && state.currentExercise.id === e.exId) {
+                state.currentExercise = { ...state.currentExercise, muscles };
+            }
+            this.closeMuscleEditor();
+            this.showToast(reset ? 'Automatische herkenning hersteld' : 'Spieren opgeslagen ✅');
+            this.renderMuscleTag();
+            if (document.getElementById('screen-global-progress').classList.contains('active')) this.showGlobalProgress(document.getElementById('nav-progress-btn'));
+        } catch {
+            this.showToast('Opslaan mislukt');
+        }
+    },
+
     resumeWorkout() {
         if (state.currentCategory) this.selectSplit(state.currentCategory);
     },
@@ -1246,6 +1571,7 @@ const app = {
         allLogs.sort((a, b) => new Date(b.logs[0].created_at) - new Date(a.logs[0].created_at));
 
         container.innerHTML = '';
+        container.appendChild(this.renderMuscleAnalysis());
         allLogs.forEach(({ exercise, logs }) => {
             const pr = Math.max(...logs.map(l => Number(l.weight)));
             const totalSets = logs.length;
@@ -1410,6 +1736,7 @@ const app = {
                 this.hideAddExerciseForm();
                 this.renderExerciseList();
                 this.showToast(`${name} toegevoegd ✅`);
+                if (!Muscles.forExercise(savedEx)) this.openMuscleEditor(savedEx.id);
             }
         } catch (e) {
             this.showToast('Fout bij opslaan oefening.');
@@ -1645,6 +1972,7 @@ const app = {
 
         document.getElementById('set-number').innerText = `Set ${setNr}`;
         document.getElementById('log-btn-label').innerText = `Log set ${setNr}`;
+        this.renderMuscleTag();
 
         const target = prev ? prev.sets[entries.length] : null;
         const prog = this.getProgression(prev, this.getProgressionStep(exId));

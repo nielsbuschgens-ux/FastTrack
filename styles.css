@@ -1978,3 +1978,287 @@ body {
 :root.light-theme .sync-status {
     background: #bbb;
 }
+
+/* ==========================================================================
+   SPIERGROEPEN
+   ========================================================================== */
+.muscle-tag {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.muscle-tag ion-icon { font-size: 1rem; }
+
+.muscle-tag.unknown {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.muscle-analysis {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.muscle-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.muscle-sub,
+.muscle-legend,
+.muscle-note {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.muscle-legend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.lg-zone {
+    width: 18px;
+    height: 8px;
+    background: var(--surface-2);
+    outline: 1px dashed var(--text-muted);
+}
+
+.muscle-tips {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.muscle-tip {
+    padding: 10px 12px;
+    background: var(--surface);
+    border-left: 4px solid var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.muscle-tip.bad { border-left-color: var(--accent); background: var(--accent-soft); }
+.muscle-tip.warn { border-left-color: #E8B400; }
+.muscle-tip.good { border-left-color: #1E9E4A; }
+
+.muscle-list {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.muscle-row + .muscle-row { border-top: 1px solid var(--border); }
+
+.muscle-row summary {
+    display: grid;
+    grid-template-columns: 9.5em 1fr 2.6em 1.4em;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 6px 12px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.muscle-row summary::-webkit-details-marker { display: none; }
+
+.muscle-name {
+    font-family: var(--font-cond);
+    font-weight: 700;
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.muscle-bar {
+    position: relative;
+    height: 10px;
+    background: var(--surface-2);
+    overflow: hidden;
+}
+
+.muscle-zone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.08);
+    border-left: 1px dashed var(--text-muted);
+    border-right: 1px dashed var(--text-muted);
+}
+
+.muscle-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background: var(--text-muted);
+}
+
+.muscle-row.good .muscle-fill { background: #1E9E4A; }
+.muscle-row.high .muscle-fill { background: #1F5FD6; }
+.muscle-row.low .muscle-fill { background: #E8B400; }
+
+.muscle-val {
+    text-align: right;
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.muscle-icon {
+    text-align: center;
+    font-weight: 700;
+}
+
+.muscle-row.none .muscle-icon,
+.muscle-row.none .muscle-name { color: var(--accent); }
+.muscle-row.low .muscle-icon { color: #E8B400; }
+.muscle-row.good .muscle-icon { color: #1E9E4A; }
+.muscle-row.high .muscle-icon { color: #5b8dff; }
+
+.muscle-detail {
+    padding: 0 12px 12px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.muscle-ex-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+}
+
+.muscle-ex-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text);
+}
+
+.muscle-ex-list li > span:first-child { flex: 1; min-width: 0; }
+.muscle-ex-list small { color: var(--text-muted); }
+.muscle-ex-sets { color: var(--text-muted); white-space: nowrap; }
+
+.muscle-edit-btn {
+    width: 44px;
+    height: 44px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+
+.muscle-ex-heading { margin-top: 12px; }
+
+/* Bottom sheet */
+.sheet-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.sheet-overlay[hidden] { display: none; }
+
+.sheet {
+    width: 100%;
+    max-width: 520px;
+    max-height: 88vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+    background: var(--bg);
+    border-top: 4px solid var(--accent);
+    animation: sheet-up 0.2s ease-out;
+}
+
+@keyframes sheet-up {
+    from { transform: translateY(40px); opacity: 0; }
+    to { transform: none; opacity: 1; }
+}
+
+.sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.sheet-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.8rem;
+    text-transform: uppercase;
+    line-height: 1;
+}
+
+.sheet .mod-label small {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 600;
+}
+
+.muscle-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.muscle-chip {
+    min-height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.muscle-chip.selected {
+    background: var(--accent-fill);
+    border-color: var(--accent-fill);
+    color: #fff;
+    font-weight: 600;
+}
+
+.muscle-chip:disabled { opacity: 0.3; cursor: default; }
+
+.sheet-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.sheet-actions .btn { flex: 1; min-height: 52px; }

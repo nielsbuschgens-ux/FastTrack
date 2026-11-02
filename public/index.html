@@ -266,6 +266,8 @@
                     <span id="set-hint" class="set-hint"></span>
                 </div>
 
+                <button id="ex-muscles" class="muscle-tag" onclick="app.openMuscleEditor()" aria-label="Spiergroepen van deze oefening"></button>
+
                 <!-- Progressie t.o.v. vorige keer (alleen bij set 1) -->
                 <div id="progress-banner" class="progress-banner" hidden></div>
 
@@ -480,6 +482,26 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Spieren-editor -->
+    <div id="muscle-sheet" class="sheet-overlay" hidden onclick="if (event.target === this) app.closeMuscleEditor()">
+        <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="muscle-sheet-title">
+            <div class="sheet-head">
+                <h2 id="muscle-sheet-title" class="sheet-title">Oefening</h2>
+                <button class="icon-btn" onclick="app.closeMuscleEditor()" aria-label="Sluiten">
+                    <ion-icon name="close"></ion-icon>
+                </button>
+            </div>
+            <h3 class="mod-label">Hoofdspier</h3>
+            <div id="muscle-primary-chips" class="muscle-chips"></div>
+            <h3 class="mod-label">Hulpspieren <small>(tellen als ½ set)</small></h3>
+            <div id="muscle-secondary-chips" class="muscle-chips"></div>
+            <div class="sheet-actions">
+                <button id="muscle-sheet-auto" class="btn btn-secondary" onclick="app.saveMuscles(true)" hidden>Automatisch</button>
+                <button id="muscle-save-btn" class="btn btn-primary" onclick="app.saveMuscles()">Opslaan →</button>
+            </div>
+        </div>
+    </div>
+
     <script src="config.js"></script>
     <script src="app.js"></script>
 </body>

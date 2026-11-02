@@ -20,6 +20,9 @@ create table if not exists public.fitness_logs (
   created_at timestamptz not null default now()
 );
 
+-- Handmatige spiergroepen per oefening ({"primary": "...", "secondary": [...]}), null = automatisch
+alter table public.fitness_exercises add column if not exists muscles jsonb;
+
 create index if not exists fitness_exercises_user_id_idx on public.fitness_exercises (user_id);
 create index if not exists fitness_logs_user_id_idx on public.fitness_logs (user_id);
 create index if not exists fitness_logs_exercise_id_idx on public.fitness_logs (exercise_id);
