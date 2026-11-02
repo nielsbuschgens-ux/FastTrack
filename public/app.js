@@ -2148,6 +2148,8 @@ const app = {
         localStorage.setItem(PLATE_MODE_KEY, JSON.stringify(modes));
         this.vibrate(15);
         this.applyPlateMode(on);
+        if (!state.dirty) this.prepareNextSet();
+        this.renderLogScreen();
     },
 
     applyPlateMode(on) {
@@ -2178,6 +2180,11 @@ const app = {
     },
 
     addPlate(size) {
+        // Voorstel staat er nog onaangeraakt op? Dan begint de eerste tik met een lege stang
+        if (this.isPlateSuggestion()) {
+            state.plates = [];
+            state.weight = 0;
+        }
         const newVal = Math.round((state.weight + size * 2) * 100) / 100;
         if (newVal > MAX_WEIGHT) return;
         this.syncPlates();
@@ -2216,6 +2223,11 @@ const app = {
         }
     },
 
+    // Alleen bij set 1 is de stang een voorstel; daarna liggen je eigen platen er nog op
+    isPlateSuggestion() {
+        return !state.dirty && !!state.currentExercise && this.sessionEntries(state.currentExercise.id).length === 0;
+    },
+
     renderPlates() {
         this.syncPlates();
         const perSideSum = state.plates.reduce((a, b) => a + b, 0);
@@ -2225,6 +2237,11 @@ const app = {
         document.getElementById('plate-per-side').innerText = rest > 0
             ? `${formatKg(perSideSum)} kg + ${formatKg(rest)} kg per kant`
             : `${formatKg(perSideSum)} kg per kant`;
+
+        // Onaangeraakt voorstel: platen doorschijnend, eerste tik bouwt opnieuw op
+        const suggested = this.isPlateSuggestion() && state.plates.length > 0;
+        document.getElementById('plate-loader').classList.toggle('suggested', suggested);
+        document.getElementById('plate-hint').innerText = suggested ? 'Voorstel · tik een plaat om zelf op te bouwen' : '';
 
         const holder = document.getElementById('bar-plates');
         holder.innerHTML = state.plates.length === 0

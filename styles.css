@@ -1175,6 +1175,20 @@ body {
     to   { transform: rotate(180deg); opacity: 1; }
 }
 
+.plate-hint {
+    font-size: 0.8rem;
+    color: var(--accent);
+    min-height: 0;
+}
+
+.plate-hint:empty { display: none; }
+
+.plate-loader.suggested .bar-plate {
+    opacity: 0.45;
+    outline: 1px dashed var(--text-muted);
+    outline-offset: -1px;
+}
+
 .plate-buttons {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
