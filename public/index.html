@@ -178,11 +178,23 @@
                 </div>
 
                 <div id="add-ex-container" class="add-ex-card" style="display: none;">
-                    <input type="text" id="new-ex-input" class="text-input" placeholder="Naam oefening..." list="ex-suggestions" autocomplete="off" enterkeyhint="done">
+                    <input type="text" id="new-ex-input" class="text-input" placeholder="Naam oefening..." list="ex-suggestions" autocomplete="off" enterkeyhint="done" oninput="app.updateNewExMuscles()">
                     <button class="btn btn-primary btn-compact" onclick="app.saveNewExercise()">Toevoegen</button>
                     <button class="icon-btn" onclick="app.hideAddExerciseForm()" aria-label="Annuleren">
                         <ion-icon name="close-outline"></ion-icon>
                     </button>
+                    <!-- Spiergroep: herkend → alleen tonen, niet herkend → zelf kiezen -->
+                    <p id="new-ex-hint" class="new-ex-hint" hidden></p>
+                    <div id="new-ex-muscles" class="new-ex-muscles" hidden>
+                        <label class="new-ex-field">
+                            <span class="mod-label">Hoofdspier</span>
+                            <select id="new-ex-primary" class="text-input" onchange="app.updateNewExMuscles()"></select>
+                        </label>
+                        <label class="new-ex-field">
+                            <span class="mod-label">Hulpspier <small>(optioneel)</small></span>
+                            <select id="new-ex-secondary" class="text-input"></select>
+                        </label>
+                    </div>
                 </div>
                 <datalist id="ex-suggestions"></datalist>
 

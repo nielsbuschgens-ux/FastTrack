@@ -127,6 +127,7 @@ function createLocalDB() {
                 name: exercise.name,
                 category: exercise.category,
                 days: exercise.days || [exercise.category],
+                muscles: exercise.muscles || null,
                 created_at: new Date().toISOString()
             };
             const exercises = LocalStore.getExercises();
@@ -287,7 +288,8 @@ function createSupabaseDB() {
                     user_id: session.user.id,
                     name: exercise.name,
                     category: exercise.category,
-                    days: exercise.days || [exercise.category]
+                    days: exercise.days || [exercise.category],
+                    muscles: exercise.muscles || null
                 })
                 .select();
 
@@ -1926,6 +1928,55 @@ const app = {
         document.getElementById('add-ex-container').style.display = 'none';
         document.getElementById('add-ex-btn').style.display = 'flex';
         document.getElementById('new-ex-input').value = '';
+        this.updateNewExMuscles();
+    },
+
+    // Live tijdens typen: bestaat al / herkend / niet herkend → spiergroep kiezen
+    updateNewExMuscles() {
+        const name = document.getElementById('new-ex-input').value.trim();
+        const hint = document.getElementById('new-ex-hint');
+        const box = document.getElementById('new-ex-muscles');
+        const primary = document.getElementById('new-ex-primary');
+        const secondary = document.getElementById('new-ex-secondary');
+
+        if (primary.options.length === 0) {
+            const opts = Object.entries(MUSCLES).map(([k, label]) => `<option value="${k}">${label}</option>`).join('');
+            primary.innerHTML = '<option value="">Kies spiergroep…</option>' + opts;
+            secondary.innerHTML = '<option value="">Geen</option>' + opts;
+        }
+        // Hulpspier kan niet gelijk zijn aan de hoofdspier
+        [...secondary.options].forEach(o => { o.disabled = o.value !== '' && o.value === primary.value; });
+        if (secondary.value && secondary.value === primary.value) secondary.value = '';
+
+        const existing = name ? this.findExerciseByName(name) : null;
+        const detected = name && !existing ? Muscles.detect(name, [state.currentCategory]) : null;
+
+        if (!name) {
+            hint.hidden = true;
+            box.hidden = true;
+            primary.value = '';
+            secondary.value = '';
+        } else if (existing) {
+            hint.hidden = false;
+            hint.innerText = `Bestaat al bij ${exDays(existing).join(', ')} — wordt gekoppeld`;
+            box.hidden = true;
+        } else if (detected) {
+            hint.hidden = false;
+            hint.innerText = `Herkend: ${Muscles.label(detected)}`;
+            box.hidden = true;
+        } else {
+            hint.hidden = false;
+            hint.innerText = 'Niet herkend — kies de spiergroep';
+            box.hidden = false;
+        }
+    },
+
+    // Handmatig gekozen spieren uit het formulier (alleen bij niet-herkende naam)
+    newExMuscleChoice() {
+        if (document.getElementById('new-ex-muscles').hidden) return null;
+        const p = document.getElementById('new-ex-primary').value;
+        const s = document.getElementById('new-ex-secondary').value;
+        return p ? { primary: p, secondary: s && s !== p ? [s] : [] } : null;
     },
 
     fillExerciseSuggestions() {
@@ -1974,7 +2025,8 @@ const app = {
         const newExData = {
             category: day,
             days: [day],
-            name: name
+            name: name,
+            muscles: this.newExMuscleChoice()
         };
 
         try {
@@ -1984,7 +2036,6 @@ const app = {
                 this.hideAddExerciseForm();
                 this.renderExerciseList();
                 this.showToast(`${name} toegevoegd ✅`);
-                if (!Muscles.forExercise(savedEx)) this.openMuscleEditor(savedEx.id);
             }
         } catch (e) {
             this.showToast('Fout bij opslaan oefening.');

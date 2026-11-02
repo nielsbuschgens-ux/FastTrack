@@ -925,6 +925,7 @@ body {
 
 .add-ex-card {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     padding: 10px;
@@ -936,6 +937,36 @@ body {
 .add-ex-card .text-input {
     flex: 1;
     min-width: 0;
+}
+
+.new-ex-hint {
+    flex-basis: 100%;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.new-ex-muscles {
+    flex-basis: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.new-ex-muscles[hidden] { display: none; }
+
+.new-ex-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.new-ex-field .mod-label { font-size: 0.8rem; }
+.new-ex-field small { text-transform: none; letter-spacing: 0; }
+
+.new-ex-field select {
+    width: 100%;
+    min-height: 44px;
 }
 
 .list-hint {
