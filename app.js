@@ -483,6 +483,31 @@ const MUSCLE_SUGGESTIONS = {
     buik: { ex: 'Crunch of Hanging Leg Raise', split: 'Legs' }
 };
 
+const BODY_OUTLINE = 'M100 48 L90 48 L90 62 Q70 64 52 71 Q37 77 36 96 L34 150 L29 214 Q27 233 34 241 Q43 241 42 228 L47 160 L51 140 L58 114 L62 150 L60 205 Q56 250 60 300 L62 312 Q56 340 62 368 L58 385 L81 387 L80 368 Q87 340 84 312 L88 300 Q96 262 99 224 L100 224 Z';
+
+const BODY_FRONT = [
+    { m: 'schouder_zij', d: 'M50 72 Q39 77 38 91 Q38 99 42 105 L46 101 Q44 88 53 78 Z' },
+    { m: 'schouder_voor', d: 'M54 76 Q46 87 47 101 L55 105 Q60 92 69 80 Q64 72 54 76 Z' },
+    { m: 'borst', d: 'M71 78 Q60 88 59 104 Q66 117 84 117 Q96 115 99 109 L99 80 Q86 73 71 78 Z' },
+    { m: 'biceps', d: 'M42 108 Q38 122 40 141 Q46 147 52 141 Q57 125 55 108 Q48 103 42 108 Z' },
+    { m: 'buik', d: 'M82 121 L99 121 L99 197 Q90 199 84 193 Q80 160 82 121 Z' },
+    { m: 'buik', d: 'M63 119 Q75 122 79 125 Q77 160 81 190 Q70 186 66 176 Q62 150 63 119 Z' },
+    { m: 'quads', d: 'M66 211 Q60 242 64 290 Q74 300 86 298 Q96 270 98 224 Q84 207 66 211 Z' },
+    { m: 'kuiten', d: 'M65 318 Q61 340 67 362 L74 362 Q71 340 74 318 Z' }
+];
+
+const BODY_BACK = [
+    { m: 'bovenrug', d: 'M99 56 Q88 61 74 69 Q65 73 61 77 L71 84 Q84 93 90 121 L99 131 Z' },
+    { m: 'schouder_zij', d: 'M50 72 Q39 77 38 91 Q38 99 42 105 L46 101 Q44 88 53 78 Z' },
+    { m: 'schouder_achter', d: 'M59 77 Q49 79 46 89 Q45 97 48 103 L58 97 Q64 87 70 85 Z' },
+    { m: 'lats', d: 'M71 89 Q62 101 62 121 Q66 151 80 172 Q92 160 95 139 L89 123 Q84 99 71 89 Z' },
+    { m: 'triceps', d: 'M42 108 Q38 122 40 141 Q46 147 52 141 Q57 125 55 108 Q48 103 42 108 Z' },
+    { m: 'onderrug', d: 'M96 141 L99 141 L99 196 L84 196 Q82 183 82 177 Q92 163 96 141 Z' },
+    { m: 'billen', d: 'M64 201 Q62 227 70 241 Q86 247 99 237 L99 201 Q82 196 64 201 Z' },
+    { m: 'hamstrings', d: 'M64 245 Q62 271 66 296 Q76 302 86 298 Q96 273 98 245 Q82 251 64 245 Z' },
+    { m: 'kuiten', d: 'M62 316 Q56 336 64 357 Q72 363 80 355 Q86 334 82 316 Q72 310 62 316 Z' }
+];
+
 const Muscles = {
     detect(name, category) {
         const n = String(name || '').toLowerCase().replace(/[-_/().,]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -1420,7 +1445,7 @@ const app = {
                             </button>
                         </li>`).join('');
                 return `
-                    <details class="muscle-row ${st}">
+                    <details class="muscle-row ${st}" data-muscle="${k}">
                         <summary>
                             <span class="muscle-name">${MUSCLES[k]}</span>
                             <span class="muscle-bar">
@@ -1446,11 +1471,56 @@ const app = {
             </div>
             ${fullWindow ? '' : '<p class="muscle-note">Nog weinig data — de analyse wordt nauwkeuriger na een paar weken trainen.</p>'}
             ${unknown > 0 ? `<p class="muscle-note">${unknown} ${unknown === 1 ? 'oefening' : 'oefeningen'} niet herkend — open de oefening en tik op "Spieren instellen".</p>` : ''}
+            ${this.renderBodyMap(stats)}
             <ul class="muscle-tips">${tipsHtml}</ul>
             <div class="muscle-legend"><span class="lg-zone"></span>doel ${MUSCLE_TARGET.min}–${MUSCLE_TARGET.max} sets/week · tik voor details</div>
             <div class="muscle-list">${rows}</div>
             <h3 class="sets-title muscle-ex-heading">Oefeningen</h3>`;
         return section;
+    },
+
+    // Lichaamsfiguur: hoe feller roze, hoe meer sets per week
+    renderBodyMap(stats) {
+        const heat = k => {
+            const v = stats[k].perWeek;
+            return v === 0 ? 0 : Math.round((0.25 + 0.75 * Math.min(1, v / MUSCLE_TARGET.max)) * 100) / 100;
+        };
+        const half = shapes => shapes.map(s => `<path class="bm${heat(s.m) === 0 ? ' zero' : ''}" d="${s.d}" data-muscle="${s.m}"
+            style="--heat:${heat(s.m)}" onclick="app.selectBodyMuscle('${s.m}')"><title>${MUSCLES[s.m]}</title></path>`).join('');
+        const figure = (shapes, label, extra = '') => `
+            <figure class="body-fig">
+                <svg viewBox="0 0 200 400" role="img" aria-label="Spiergroepen ${label}">
+                    <circle class="body-base" cx="100" cy="28" r="18"></circle>
+                    <path class="body-base" d="${BODY_OUTLINE}"></path>
+                    <path class="body-base" d="${BODY_OUTLINE}" transform="translate(200 0) scale(-1 1)"></path>
+                    ${half(shapes)}
+                    <g transform="translate(200 0) scale(-1 1)">${half(shapes)}</g>
+                    ${extra}
+                </svg>
+                <figcaption>${label}</figcaption>
+            </figure>`;
+        // Sixpack-lijntjes (decoratie)
+        const abs = '<path class="body-line" d="M84 140 H116 M84 159 H116 M84 177 H116 M100 121 V197"></path>';
+        return `
+            <div class="body-map">
+                ${figure(BODY_FRONT, 'Voor', abs)}
+                ${figure(BODY_BACK, 'Achter')}
+            </div>
+            <div class="body-scale"><span>0</span><span class="body-scale-bar"></span><span>${MUSCLE_TARGET.max}+ sets/week</span></div>
+            <p id="body-info" class="body-info">Tik op een spier voor details</p>`;
+    },
+
+    selectBodyMuscle(k) {
+        const { stats } = this.computeMuscleStats();
+        const s = stats[k];
+        const status = s.perWeek === 0 ? 'niet getraind'
+            : s.perWeek < MUSCLE_TARGET.min ? 'te weinig'
+            : s.perWeek <= MUSCLE_TARGET.max ? 'goed' : 'veel';
+        document.querySelectorAll('.bm').forEach(p => p.classList.toggle('active', p.dataset.muscle === k));
+        document.getElementById('body-info').innerHTML =
+            `<strong>${MUSCLES[k]}</strong> · ${formatKg(s.perWeek)} sets/week · ${status}`;
+        document.querySelectorAll('.muscle-row').forEach(r => { r.open = r.dataset.muscle === k; });
+        this.vibrate(10);
     },
 
     // Spieren-label op het logscherm
