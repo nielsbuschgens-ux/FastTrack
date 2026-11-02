@@ -778,6 +778,36 @@ body {
     min-height: 1.2em;
 }
 
+.hint-up {
+    display: block;
+    margin-top: 2px;
+    color: var(--accent);
+    font-family: var(--font-cond);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.progress-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--accent-soft);
+    border-left: 4px solid var(--accent);
+    font-size: 0.9rem;
+    color: var(--text);
+}
+
+.progress-banner strong {
+    flex-shrink: 0;
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.5rem;
+    color: var(--accent);
+    white-space: nowrap;
+}
+
 .modifier-group {
     display: flex;
     flex-direction: column;

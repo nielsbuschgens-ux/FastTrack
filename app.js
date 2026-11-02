@@ -310,6 +310,7 @@ const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const MAX_WEIGHT = 500;
 const PLATE_MODE_KEY = 'fasttrack_plate_mode';   // { exerciseId: true } per oefening
 const PLATE_SIZES = [25, 20, 15, 10, 5, 2.5, 1.25];
+const PROGRESSION_STEP = 2.5;   // kg erbij als alle werksets vorige keer gehaald zijn
 const MAX_REPS = 100;
 const SPLITS = ['Push', 'Pull', 'Legs'];
 const EXERCISE_SUGGESTIONS = {
@@ -958,21 +959,50 @@ const app = {
         return { date: ref, sets };
     },
 
-    // Slimme suggestie: gewicht van je vorige set vandaag, reps-doel van vorige keer
+    // Progressie t.o.v. vorige keer (double progression):
+    // alle werksets (zwaarste gewicht) gehaald → gewicht omhoog, anders 1 rep erbij op de sets die tekort kwamen.
+    // Bodyweight (0 kg) → 1 rep erbij. Geeft per set van vorige keer een doel terug.
+    getProgression(prev) {
+        if (!prev || prev.sets.length === 0) return null;
+        const sets = prev.sets.map(s => ({ weight: Number(s.weight), reps: Number(s.reps) }));
+        const top = Math.max(...sets.map(s => s.weight));
+        const working = sets.filter(s => s.weight === top);
+        const targetReps = working[0].reps;
+
+        if (top === 0) {
+            return { type: 'reps', targets: sets.map(s => ({ weight: 0, reps: Math.min(s.reps + 1, MAX_REPS) })) };
+        }
+        if (working.every(s => s.reps >= targetReps)) {
+            const next = Math.min(top + PROGRESSION_STEP, MAX_WEIGHT);
+            return {
+                type: 'weight',
+                from: top,
+                to: next,
+                targets: sets.map(s => s.weight === top ? { weight: next, reps: s.reps } : s)
+            };
+        }
+        return {
+            type: 'reps',
+            targets: sets.map(s => s.weight === top && s.reps < targetReps ? { weight: s.weight, reps: s.reps + 1 } : s)
+        };
+    },
+
+    // Slimme suggestie: progressiedoel van vandaag, gewicht volgt je vorige set vandaag
     suggestNextSet(exId) {
         const entries = this.sessionEntries(exId);
-        const prev = this.getPreviousSession(exId);
+        const prog = this.getProgression(this.getPreviousSession(exId));
         const n = entries.length;
-        const prevSet = prev ? prev.sets[n] : null;
+        const target = prog ? prog.targets[n] : null;
 
         if (n > 0) {
             const last = entries[n - 1];
-            return { weight: last.weight, reps: prevSet ? Number(prevSet.reps) : last.reps };
+            if (!target) return { weight: last.weight, reps: last.reps };
+            // Zelfde gewicht gebleven als het doel van de vorige set? Volg dan ook het doel van deze set
+            const prevTarget = prog.targets[n - 1];
+            const weight = Number(last.weight) === prevTarget.weight ? target.weight : last.weight;
+            return { weight, reps: target.reps };
         }
-        if (prev && prev.sets.length > 0) {
-            const first = prev.sets[0];
-            return { weight: Number(first.weight), reps: Number(first.reps) };
-        }
+        if (target) return { weight: target.weight, reps: target.reps };
         return { weight: 20, reps: 10 };
     },
 
@@ -1502,11 +1532,30 @@ const app = {
         document.getElementById('log-btn-label').innerText = `Log set ${setNr}`;
 
         const target = prev ? prev.sets[entries.length] : null;
-        let hint;
-        if (target) hint = `Vorige keer: ${formatKg(target.weight)} kg × ${target.reps}`;
-        else if (prev) hint = `Extra set t.o.v. vorige keer 💪`;
-        else hint = entries.length === 0 ? 'Eerste keer — kies een startgewicht' : '';
-        document.getElementById('set-hint').innerText = hint;
+        const prog = this.getProgression(prev);
+        const goal = prog ? prog.targets[entries.length] : null;
+        const hintEl = document.getElementById('set-hint');
+        if (target) {
+            const was = `Vorige keer: ${formatKg(target.weight)} kg × ${target.reps}`;
+            const up = goal && (goal.weight !== Number(target.weight) || goal.reps !== Number(target.reps));
+            hintEl.innerHTML = up
+                ? `${was} <span class="hint-up">↑ Vandaag: ${formatKg(goal.weight)} kg × ${goal.reps}</span>`
+                : was;
+        } else {
+            hintEl.innerText = prev ? 'Extra set t.o.v. vorige keer 💪'
+                : entries.length === 0 ? 'Eerste keer — kies een startgewicht' : '';
+        }
+
+        // Progressie-banner bij de eerste set
+        const banner = document.getElementById('progress-banner');
+        if (prog && entries.length === 0) {
+            banner.hidden = false;
+            banner.innerHTML = prog.type === 'weight'
+                ? `<strong>+${formatKg(prog.to - prog.from)} kg</strong> Vorige keer alle sets gehaald op ${formatKg(prog.from)} kg`
+                : `<strong>+1 rep</strong> Eén rep meer op de sets waar je vorige keer tekort kwam`;
+        } else {
+            banner.hidden = true;
+        }
 
         // Vandaag gelogde sets
         const todaySection = document.getElementById('today-section');
