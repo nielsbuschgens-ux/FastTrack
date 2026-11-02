@@ -127,6 +127,27 @@
                     <span class="resume-cta">Verder →</span>
                 </button>
 
+                <!-- Weekdoel & streak -->
+                <section id="week-goal" class="week-goal" aria-label="Weekdoel">
+                    <div class="week-top">
+                        <div>
+                            <span class="week-label">Deze week</span>
+                            <div class="week-score"><span id="week-count">0</span><span class="week-of">/<span id="week-goal-val">3</span></span></div>
+                        </div>
+                        <div class="week-right">
+                            <span id="week-streak" class="week-streak"></span>
+                            <div class="week-goal-edit" role="group" aria-label="Weekdoel aanpassen">
+                                <button class="goal-btn" onclick="app.changeWeekGoal(-1)" aria-label="Weekdoel verlagen">−</button>
+                                <span class="goal-text">Doel <span id="week-goal-num">3×</span></span>
+                                <button class="goal-btn" onclick="app.changeWeekGoal(1)" aria-label="Weekdoel verhogen">+</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="week-bar"><div id="week-progress" class="week-bar-fill"></div></div>
+                    <span id="week-status" class="week-status"></span>
+                    <div id="week-days" class="week-days"></div>
+                </section>
+
                 <h2 class="section-heading">Kies je <span class="brush">training</span></h2>
 
                 <div class="split-container">

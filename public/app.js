@@ -310,6 +310,7 @@ const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const MAX_WEIGHT = 500;
 const PLATE_MODE_KEY = 'fasttrack_plate_mode';   // { exerciseId: true } per oefening
 const PLATE_SIZES = [25, 20, 15, 10, 5, 2.5, 1.25];
+const WEEK_GOAL_KEY = 'fasttrack_week_goal';
 const PROGRESSION_STEP = 2.5;   // kg erbij als alle werksets vorige keer gehaald zijn
 const MAX_REPS = 100;
 const SPLITS = ['Push', 'Pull', 'Legs'];
@@ -321,6 +322,17 @@ const EXERCISE_SUGGESTIONS = {
 
 function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function dayKey(d) {
+    return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+// Maandag 00:00 (lokale tijd) van de week waarin d valt
+function startOfWeek(d) {
+    const s = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    s.setDate(s.getDate() - ((s.getDay() + 6) % 7));
+    return s;
 }
 
 function isSameDay(a, b) {
@@ -1080,6 +1092,8 @@ const app = {
             }
         });
 
+        this.renderWeekGoal();
+
         const banner = document.getElementById('resume-banner');
         if (banner) {
             banner.hidden = !sessionActive;
@@ -1089,6 +1103,82 @@ const app = {
                     `${state.currentCategory || 'Workout'} · ${exCount} oef. · ${state.sessionSets} sets`;
             }
         }
+    },
+
+    // --- Weekdoel & streak ---
+    getWeekGoal() {
+        const g = parseInt(localStorage.getItem(WEEK_GOAL_KEY), 10);
+        return g >= 1 && g <= 7 ? g : 3;
+    },
+
+    changeWeekGoal(delta) {
+        const g = Math.min(7, Math.max(1, this.getWeekGoal() + delta));
+        localStorage.setItem(WEEK_GOAL_KEY, String(g));
+        this.vibrate(15);
+        this.renderWeekGoal();
+    },
+
+    // Trainingsdagen (lokale datum) uit alle gelogde sets + een lopende sessie vandaag
+    getTrainingDays() {
+        const days = new Set();
+        Object.values(state.logsCache).forEach(logs => {
+            (logs || []).forEach(l => days.add(dayKey(new Date(l.created_at))));
+        });
+        if (state.sessionSets > 0) days.add(dayKey(new Date()));
+        return days;
+    },
+
+    renderWeekGoal() {
+        const card = document.getElementById('week-goal');
+        if (!card) return;
+        const goal = this.getWeekGoal();
+        const days = this.getTrainingDays();
+        const monday = startOfWeek(new Date());
+
+        const countWeek = start => {
+            let n = 0;
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(start);
+                d.setDate(start.getDate() + i);
+                if (days.has(dayKey(d))) n++;
+            }
+            return n;
+        };
+
+        const thisWeek = countWeek(monday);
+        const reached = thisWeek >= goal;
+
+        // Streak: aaneengesloten afgeronde weken met doel gehaald (+ deze week als die al gehaald is)
+        let streak = reached ? 1 : 0;
+        const wk = new Date(monday);
+        for (let i = 0; i < 520; i++) {
+            wk.setDate(wk.getDate() - 7);
+            if (countWeek(wk) >= goal) streak++;
+            else break;
+        }
+
+        const todayKey = dayKey(new Date());
+        const labels = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
+        document.getElementById('week-days').innerHTML = labels.map((label, i) => {
+            const d = new Date(monday);
+            d.setDate(monday.getDate() + i);
+            const key = dayKey(d);
+            const cls = [days.has(key) ? 'done' : '', key === todayKey ? 'today' : ''].join(' ').trim();
+            return `<span class="week-day ${cls}"><span class="week-dot"></span>${label}</span>`;
+        }).join('');
+
+        const left = goal - thisWeek;
+        card.classList.toggle('reached', reached);
+        document.getElementById('week-count').innerText = thisWeek;
+        document.getElementById('week-goal-val').innerText = goal;
+        document.getElementById('week-goal-num').innerText = `${goal}×`;
+        document.getElementById('week-status').innerText = reached
+            ? 'Weekdoel gehaald 💪'
+            : `Nog ${left} ${left === 1 ? 'training' : 'trainingen'} deze week`;
+        document.getElementById('week-progress').style.width = `${Math.min(100, (thisWeek / goal) * 100)}%`;
+        document.getElementById('week-streak').innerText = streak > 0
+            ? `🔥 ${streak} ${streak === 1 ? 'week' : 'weken'} op rij`
+            : 'Start je streak';
     },
 
     resumeWorkout() {

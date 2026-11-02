@@ -442,6 +442,166 @@ body {
 
 .launch-body::-webkit-scrollbar { display: none; }
 
+/* Weekdoel & streak */
+.week-goal {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--surface-2);
+    border-radius: var(--radius);
+}
+
+.week-goal.reached {
+    border-left-color: var(--accent);
+}
+
+.week-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.week-label {
+    font-family: var(--font-cond);
+    font-weight: 700;
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+}
+
+.week-score {
+    font-family: var(--font-display);
+    font-size: 3rem;
+    line-height: 0.95;
+    font-variant-numeric: tabular-nums;
+}
+
+.week-of {
+    color: var(--text-muted);
+    font-size: 1.8rem;
+}
+
+.week-goal.reached #week-count {
+    color: var(--accent);
+}
+
+.week-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+}
+
+.week-streak {
+    font-family: var(--font-cond);
+    font-weight: 700;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.week-goal-edit {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.goal-btn {
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 1.3rem;
+    cursor: pointer;
+}
+
+.goal-btn:active {
+    transform: scale(0.92);
+}
+
+.goal-text {
+    min-width: 64px;
+    text-align: center;
+    font-family: var(--font-cond);
+    font-weight: 700;
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.goal-text span {
+    color: var(--text);
+}
+
+.week-bar {
+    height: 8px;
+    background: var(--surface-2);
+    overflow: hidden;
+}
+
+.week-bar-fill {
+    height: 100%;
+    width: 0;
+    background: var(--accent);
+    transition: width 0.4s ease-out;
+}
+
+.week-status {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.week-goal.reached .week-status {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.week-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+
+.week-day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-cond);
+    font-weight: 700;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.week-dot {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid var(--surface-2);
+}
+
+.week-day.done .week-dot {
+    background: var(--accent-fill);
+    border-color: var(--accent-fill);
+}
+
+.week-day.today {
+    color: var(--text);
+}
+
+.week-day.today:not(.done) .week-dot {
+    border-color: var(--text-muted);
+}
+
 .resume-banner {
     width: 100%;
     min-height: 64px;
