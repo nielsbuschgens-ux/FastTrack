@@ -4,10 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "playwright test",
     "build": "node generate-config.js",
     "start": "npm run build && npx --yes serve public -l 3000",
-    "dev": "npx --yes serve . -l 3000"
+    "dev": "npx --yes serve . -l 3000",
+    "test:headed": "playwright test --headed",
+    "test:report": "playwright show-report test-results/report",
+    "test:watch": "set SLOWMO=600&& playwright test --headed --workers=1"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +22,7 @@
   "devDependencies": {
     "@capacitor/android": "^8.2.0",
     "@capacitor/cli": "^8.2.0",
+    "@playwright/test": "^1.65.1",
     "dotenv": "^17.3.1"
   }
 }
