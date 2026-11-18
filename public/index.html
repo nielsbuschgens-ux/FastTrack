@@ -108,6 +108,9 @@
                     </div>
                 </div>
                 <div class="header-actions">
+                    <button class="icon-btn icon-btn-boxed" onclick="app.openFeedback()" title="Feedback geven" aria-label="Feedback geven">
+                        <ion-icon name="chatbubble-ellipses-outline"></ion-icon>
+                    </button>
                     <button class="icon-btn icon-btn-boxed" id="theme-toggle-btn" onclick="app.toggleTheme()" title="Wissel thema" aria-label="Wissel thema">
                         <ion-icon name="sunny-outline" id="theme-icon"></ion-icon>
                     </button>
@@ -451,6 +454,31 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Feedback -->
+    <div id="feedback-sheet" class="sheet-overlay" hidden onclick="if (event.target === this) app.closeFeedback()">
+        <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="feedback-title">
+            <div class="sheet-head">
+                <h2 id="feedback-title" class="sheet-title">Feedback</h2>
+                <button class="icon-btn" onclick="app.closeFeedback()" aria-label="Sluiten">
+                    <ion-icon name="close"></ion-icon>
+                </button>
+            </div>
+            <div id="feedback-types" class="muscle-chips" role="group" aria-label="Soort feedback"></div>
+            <label class="feedback-field">
+                <span class="mod-label">Wat wil je kwijt?</span>
+                <textarea id="feedback-text" class="text-input feedback-text" rows="5" maxlength="2000"
+                    placeholder="Bijv. wat werkt niet, wat mis je, wat kan beter?" oninput="app.updateFeedbackCount()"></textarea>
+            </label>
+            <div class="feedback-meta">
+                <span>Je e-mailadres wordt meegestuurd zodat we kunnen reageren.</span>
+                <span id="feedback-count">0/2000</span>
+            </div>
+            <div class="sheet-actions">
+                <button id="feedback-send-btn" class="btn btn-primary" onclick="app.sendFeedback()" disabled>Versturen →</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Spieren-editor -->
     <div id="muscle-sheet" class="sheet-overlay" hidden onclick="if (event.target === this) app.closeMuscleEditor()">
         <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="muscle-sheet-title">

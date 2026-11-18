@@ -70,6 +70,9 @@ body {
     position: relative;
     background: var(--bg);
     overflow: hidden;
+    /* clip: voorkomt dat focus op een invoerveld de app opzij scrolt
+       (inactieve schermen staan 20px rechts voor de overgang) */
+    overflow: clip;
 }
 
 [hidden] {
@@ -2440,3 +2443,28 @@ body {
 :root.light-theme .body-base { fill: #e4e4e4; stroke: #c8c8c8; }
 :root.light-theme .bm.zero { fill: #d0d0d0; }
 :root.light-theme .body-scale-bar { background: linear-gradient(90deg, #d0d0d0 0%, rgba(214, 0, 58, 0.25) 8%, var(--accent) 100%); }
+
+/* Feedback */
+.feedback-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.feedback-text {
+    min-height: 120px;
+    resize: vertical;
+    line-height: 1.4;
+}
+
+.feedback-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.feedback-meta span:last-child { white-space: nowrap; }
+
+#feedback-send-btn:disabled { opacity: 0.4; }

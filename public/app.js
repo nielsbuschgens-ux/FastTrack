@@ -150,6 +150,12 @@ function createLocalDB() {
             if (user) LocalStore.setUser({ ...user, user_metadata: { ...user.user_metadata, fasttrack_scheme: scheme } });
         },
 
+        async saveFeedback(feedback) {
+            const list = JSON.parse(localStorage.getItem('fasttrack_demo_feedback') || '[]');
+            list.push({ ...feedback, id: LocalStore.uid(), created_at: new Date().toISOString() });
+            localStorage.setItem('fasttrack_demo_feedback', JSON.stringify(list));
+        },
+
         async updateExerciseMuscles(id, muscles) {
             LocalStore.setExercises(LocalStore.getExercises().map(ex => ex.id === id ? { ...ex, muscles } : ex));
         },
@@ -338,6 +344,26 @@ function createSupabaseDB() {
             if (error) console.error("Save Scheme Error:", error);
         },
 
+        async saveFeedback(feedback) {
+            const session = await this.getSession();
+            if (!session) throw new Error('Niet ingelogd');
+
+            const { error } = await supabaseClient
+                .from('fitness_feedback')
+                .insert({
+                    user_id: session.user.id,
+                    email: session.user.email || null,
+                    type: feedback.type,
+                    message: feedback.message,
+                    context: feedback.context
+                });
+
+            if (error) {
+                console.error("Save Feedback Error:", error);
+                throw error;
+            }
+        },
+
         // muscles: { primary, secondary: [] } of null (= automatisch herkennen)
         async updateExerciseMuscles(id, muscles) {
             const session = await this.getSession();
@@ -380,6 +406,8 @@ const SCHEMES = {
     bro: { label: 'Spiergroep-split', days: ['Borst', 'Rug', 'Benen', 'Schouders', 'Armen'] }
 };
 const DEFAULT_SCHEME = 'ppl';
+const APP_VERSION = '2026-11-18';        // meegestuurd met feedback
+const FEEDBACK_TYPES = { bug: '🐞 Bug', idee: '💡 Idee', anders: '💬 Anders' };
 const SCHEME_KEY = 'fasttrack_scheme';
 
 // Soort dag → icoon, suggesties en spierherkenning
@@ -498,7 +526,9 @@ const state = {
     dirty: false,               // gebruiker heeft gewicht/reps zelf aangepast
     plateMode: false,           // gewicht invoeren via platen (stang telt niet mee)
     plates: [],                 // platen per kant, in volgorde van opladen
-    muscleEdit: null,           // { exId, primary, secondary } tijdens bewerken spieren
+    muscleEdit: null,
+    feedbackType: 'idee',
+    feedbackFrom: null,         // scherm waarvandaan feedback geopend is           // { exId, primary, secondary } tijdens bewerken spieren
     saving: false,
     toastTimeout: null
 };
@@ -1674,6 +1704,70 @@ const app = {
         tag.innerHTML = m
             ? `<span>${escapeHtml(Muscles.label(m))}</span><ion-icon name="create-outline"></ion-icon>`
             : '<span>Spieren instellen</span><ion-icon name="add-outline"></ion-icon>';
+    },
+
+    // --- Feedback ---
+    openFeedback() {
+        const active = document.querySelector('.screen.active');
+        state.feedbackFrom = active ? active.id.replace('screen-', '') : null;
+        state.feedbackType = 'idee';
+        document.getElementById('feedback-text').value = '';
+        this.renderFeedbackTypes();
+        this.updateFeedbackCount();
+        document.getElementById('feedback-sheet').hidden = false;
+        setTimeout(() => document.getElementById('feedback-text').focus(), 50);
+    },
+
+    closeFeedback() {
+        document.getElementById('feedback-sheet').hidden = true;
+    },
+
+    pickFeedbackType(type) {
+        state.feedbackType = type;
+        this.vibrate(10);
+        this.renderFeedbackTypes();
+    },
+
+    renderFeedbackTypes() {
+        document.getElementById('feedback-types').innerHTML = Object.entries(FEEDBACK_TYPES).map(([k, label]) => `
+            <button class="muscle-chip${state.feedbackType === k ? ' selected' : ''}" aria-pressed="${state.feedbackType === k}"
+                onclick="app.pickFeedbackType('${k}')">${label}</button>`).join('');
+    },
+
+    updateFeedbackCount() {
+        const len = document.getElementById('feedback-text').value.trim().length;
+        document.getElementById('feedback-send-btn').disabled = len === 0;
+        document.getElementById('feedback-count').innerText = `${document.getElementById('feedback-text').value.length}/2000`;
+    },
+
+    async sendFeedback() {
+        const message = document.getElementById('feedback-text').value.trim();
+        if (!message || state.sendingFeedback) return;
+        state.sendingFeedback = true;
+        const btn = document.getElementById('feedback-send-btn');
+        btn.disabled = true;
+        try {
+            await DB.saveFeedback({
+                type: state.feedbackType,
+                message: message.slice(0, 2000),
+                context: {
+                    screen: state.feedbackFrom,
+                    exercise: state.currentExercise ? state.currentExercise.name : null,
+                    scheme: state.scheme,
+                    theme: state.theme,
+                    version: APP_VERSION,
+                    userAgent: navigator.userAgent,
+                    viewport: `${window.innerWidth}x${window.innerHeight}`
+                }
+            });
+            this.closeFeedback();
+            this.showToast('Bedankt voor je feedback! 🙏', true);
+        } catch (e) {
+            this.showToast('Versturen mislukt, probeer het later opnieuw');
+        } finally {
+            state.sendingFeedback = false;
+            this.updateFeedbackCount();
+        }
     },
 
     // --- Spieren-editor (bottom sheet) ---

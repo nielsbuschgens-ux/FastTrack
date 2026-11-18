@@ -94,3 +94,24 @@ begin
   exception when duplicate_object then null;
   end;
 end $$;
+
+-- Feedback van gebruikers (alleen versturen; lezen doe je als beheerder in het Supabase-dashboard)
+create table if not exists public.fitness_feedback (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  email text,
+  type text not null default 'idee' check (type in ('bug', 'idee', 'anders')),
+  message text not null check (char_length(message) between 1 and 2000),
+  context jsonb,
+  status text not null default 'nieuw' check (status in ('nieuw', 'opgepakt', 'klaar')),
+  created_at timestamptz not null default now()
+);
+
+alter table public.fitness_feedback enable row level security;
+grant insert on public.fitness_feedback to authenticated;
+
+drop policy if exists "Users can send feedback" on public.fitness_feedback;
+create policy "Users can send feedback"
+  on public.fitness_feedback for insert
+  to authenticated
+  with check (auth.uid() = user_id);
